@@ -4067,7 +4067,7 @@ boot();
 </style>
 <script>
 (function () {
-  var APP = 'pocketdeck', BUILD = 1 /*@JRT_BUILD@*/;
+  var APP = 'pocketdeck', BUILD = 2 /*@JRT_BUILD@*/;
   var VERSION_URL = 'https://raw.githubusercontent.com/Jrtorres13/' + APP + '/main/version.json';
   var KEY = 'jrt-update:' + APP;
   // The web copy (GitHub Pages) is always the newest already, and the phone can't run the PC updater.
@@ -4086,9 +4086,9 @@ boot();
   // After "Update now": the updater replaces the files, and this page reloads until it is the new version.
   var pending = read();
   if (pending && pending.target) {
-    if (BUILD >= pending.target) { write(null); show('Updated. Youâ€™re on the newest version.'); go.hidden = true; later.textContent = 'OK'; later.hidden = false; }
-    else if (Date.now() - pending.at < 120000) { show('Updatingâ€¦ this window refreshes by itself.', true); setTimeout(function () { location.reload(); }, 4000); return; }
-    else { write(null); show('The update didnâ€™t finish. Check the update window, or try again.'); }
+    if (BUILD >= pending.target) { write(null); show('Updated. You’re on the newest version.'); go.hidden = true; later.textContent = 'OK'; later.hidden = false; }
+    else if (Date.now() - pending.at < 120000) { show('Updating… this window refreshes by itself.', true); setTimeout(function () { location.reload(); }, 4000); return; }
+    else { write(null); show('The update didn’t finish. Check the update window, or try again.'); }
   }
 
   var latest = null;
@@ -4102,7 +4102,7 @@ boot();
   go.onclick = function () {
     if (!latest) return;
     write({ target: latest.build, at: Date.now() });
-    show('Updatingâ€¦ this window refreshes by itself.', true);
+    show('Updating… this window refreshes by itself.', true);
     location.href = 'jrtapp://update/' + APP;
     setTimeout(function () { location.reload(); }, 6000);
   };

@@ -1,1 +1,5 @@
-{ "build": 1, "notes": "" }
+{
+    "build":  2,
+    "notes":  "Fixed garbled text in the update message",
+    "date":  "2026-11-02"
+}
