@@ -1,0 +1,7 @@
+node_modules/
+profile/
+*.log
+Thumbs.db
+.env
+.env.*
+

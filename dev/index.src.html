@@ -1,0 +1,1540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="description" content="PocketDeck turns a spare phone into a key deck that controls your Windows PC over Wi-Fi.">
+<meta name="theme-color" content="#120d0b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PocketDeck">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon.png">
+<link rel="icon" href="/icon.png">
+<title>PocketDeck</title>
+<style>
+/* Hallmark · shape: app screen · genre: atmospheric · theme: Kiln (deal 1/3, seed phone-stream-deck-hardware-0f11·ab49497c·2026-11-02·r0) · redesign: full
+ * nav: top bar with the page name, page tabs under the deck · signature: the deck of backlit keycaps, the user's colour lit from the icon and the key's lower edge · states: loading, offline, paused, unpaired, empty key, live (muted) · kiln: ember, reduction, bisque and carbon colourways, chosen by the user
+ * axes: dark/high-contrast-serif/warm · posture: full-palette · surface: absolute black in the carbon colourway only · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H3 E4 S4 R4 V3 · weakest: V, the user picks key colours outside the ramp, so the ramp lives in the defaults and live states while custom colours stay confined to each key's light */
+/* Hallmark · waive 28b · the video is display:none and never painted · it only keeps the phone screen awake */
+/* Hallmark · waive 7b · only the carbon colourway and its QR code · the user picks pure black for OLED phones */
+/* Hallmark · fonts: Gloock stands in for Boska (Fontshare unreachable from the build box; a fonts.md high-contrast serif peer), both faces embedded so the deck works with no internet */
+@font-face { font-family: "Gloock"; src: url(/*@GLOOCK@*/) format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Geist"; src: url(/*@GEIST@*/) format("woff2"); font-weight: 100 900; font-display: swap; }
+
+:root {
+  color-scheme: dark;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem; --text-4xl: 3rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
+  --z-raised: 10; --z-modal: 400; --z-toast: 500;
+  --color-paper: oklch(13% 0.012 40); --color-paper-2: oklch(17.5% 0.016 40); --color-paper-3: oklch(22% 0.018 40); --color-paper-4: oklch(27% 0.02 40);
+  --color-ink: oklch(94% 0.02 80); --color-ink-2: oklch(84% 0.025 70); --color-muted: oklch(72% 0.03 60);
+  --color-rule: oklch(96% 0.01 80 / 0.12); --color-rule-strong: oklch(96% 0.01 80 / 0.24);
+  --color-accent: oklch(70% 0.2 45); --color-accent-ink: oklch(14% 0.02 40); --color-focus: oklch(76% 0.19 56);
+  --color-error: oklch(72% 0.15 27); --color-success: oklch(76% 0.13 150); --color-warn: oklch(84% 0.13 78);
+  --heat-1: oklch(22% 0.07 22); --heat-2: oklch(40% 0.16 27); --heat-3: oklch(60% 0.21 36); --heat-4: oklch(76% 0.19 56); --heat-5: oklch(89% 0.14 78); --heat-6: oklch(98% 0.04 95);
+  --scrim: oklch(6% 0.01 40 / 0.66); --key-hi: oklch(100% 0 0 / 0.07); --key-lo: oklch(4% 0.01 40 / 0.7); --shade: oklch(8% 0.01 40 / 0.72);
+  --qr-light: oklch(94% 0.02 80); --qr-dark: oklch(13% 0.012 40);
+  --on-light: oklch(16% 0.02 40); --on-dark: oklch(96% 0.02 80);
+  /* key lights: what a user can pick for a key */
+  --key-cream: oklch(92% 0.03 80); --key-ember: oklch(70% 0.2 45); --key-amber: oklch(82% 0.15 75); --key-whiteheat: oklch(96% 0.05 92);
+  --key-oxblood: oklch(58% 0.19 27); --key-rose: oklch(74% 0.14 8); --key-sage: oklch(78% 0.1 150); --key-teal: oklch(76% 0.1 190);
+  --key-sky: oklch(76% 0.11 235); --key-iris: oklch(72% 0.13 285); --key-stone: oklch(66% 0.025 60); --key-ash: oklch(44% 0.015 40);
+  --font-display: "Gloock", "Iowan Old Style", Georgia, serif; --font-body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; --font-outlier: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius-card: 28px; --radius-well: 16px; --radius-pill: 999px; --rule-hair: 1px;
+  --shadow-card: 0 50px 90px -30px oklch(8% 0.01 40 / 0.5);
+  --tracking-display: -0.02em;
+  --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px); --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px);
+}
+/* colourways */
+:root[data-theme="reduction"] {
+  --color-paper: oklch(19% 0.05 22); --color-paper-2: oklch(23% 0.06 22); --color-paper-3: oklch(28% 0.065 22); --color-paper-4: oklch(33% 0.07 22);
+  --color-ink: oklch(95% 0.02 85); --color-ink-2: oklch(87% 0.03 75); --color-muted: oklch(78% 0.04 60);
+  --color-accent: oklch(84% 0.12 62); --color-focus: oklch(88% 0.12 70); --qr-dark: oklch(19% 0.05 22);
+}
+:root[data-theme="carbon"] {
+  --color-paper: oklch(1% 0.005 40); --color-paper-2: oklch(12% 0.008 40); --color-paper-3: oklch(16% 0.01 40); --color-paper-4: oklch(21% 0.012 40);
+  --qr-dark: oklch(1% 0.005 40);
+}
+:root[data-theme="bisque"] {
+  color-scheme: light;
+  --color-paper: oklch(96.5% 0.014 80); --color-paper-2: oklch(93% 0.02 78); --color-paper-3: oklch(98.5% 0.008 80); --color-paper-4: oklch(89% 0.025 76);
+  --color-ink: oklch(20% 0.02 40); --color-ink-2: oklch(30% 0.025 40); --color-muted: oklch(45% 0.03 50);
+  --color-rule: oklch(20% 0.02 40 / 0.14); --color-rule-strong: oklch(20% 0.02 40 / 0.28);
+  --color-accent: oklch(54% 0.17 50); --color-accent-ink: oklch(98% 0.01 80); --color-focus: oklch(54% 0.17 50);
+  --key-hi: oklch(100% 0 0 / 0.9); --key-lo: oklch(40% 0.03 50 / 0.25); --scrim: oklch(25% 0.02 40 / 0.4); --shade: oklch(20% 0.02 40 / 0.6);
+  --key-cream: oklch(28% 0.02 40); --key-whiteheat: oklch(60% 0.12 80); --key-amber: oklch(64% 0.15 70); --key-sage: oklch(55% 0.11 150);
+  --key-teal: oklch(55% 0.1 190); --key-sky: oklch(55% 0.13 240); --key-stone: oklch(50% 0.03 60); --key-rose: oklch(58% 0.17 8);
+}
+
+*, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { overflow-x: clip; }
+html, body { margin: 0; height: 100%; background: var(--color-paper); color: var(--color-ink); font-family: var(--font-body); font-size: var(--text-md); line-height: 1.5; -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+body { overflow-y: hidden; caret-color: var(--color-accent); }
+::selection { background: color-mix(in oklab, var(--color-accent) 35%, transparent); }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: none; padding: 0; }
+button:disabled { cursor: not-allowed; color: var(--color-muted); opacity: 0.5; }
+svg { display: block; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: 400; letter-spacing: var(--tracking-display); line-height: 1.05; overflow-wrap: break-word; min-width: 0; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+.hidden { display: none !important; }
+.figure { font-family: var(--font-display); letter-spacing: -0.03em; font-variant-numeric: lining-nums tabular-nums; }
+
+/* ---------- shell ---------- */
+#app { position: fixed; inset: 0; display: flex; flex-direction: column; gap: var(--space-xs); padding: calc(var(--safe-t) + var(--space-xs)) calc(var(--safe-r) + var(--space-md)) calc(var(--safe-b) + var(--space-xs)) calc(var(--safe-l) + var(--space-md)); }
+.bar { display: flex; align-items: center; gap: var(--space-xs); min-height: 56px; flex: 0 0 auto; }
+.where { flex: 1; min-width: 0; }
+.where h1 { font-size: var(--text-2xl); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status { font-size: var(--text-xs); color: var(--color-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status.off { color: var(--color-error); }
+.status.paused { color: var(--color-warn); }
+.round { width: 44px; height: 44px; flex: 0 0 auto; display: grid; place-items: center; border-radius: var(--radius-pill); color: var(--color-ink-2); box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule); transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out); }
+.round svg { width: 20px; height: 20px; }
+.round:hover { background: var(--color-paper-2); color: var(--color-ink); }
+.round:active { background: var(--color-paper-3); }
+.pill { min-height: 44px; padding: 0 var(--space-md); border-radius: var(--radius-pill); display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); font-weight: 500; font-size: var(--text-sm); white-space: nowrap; transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out); }
+.pill svg { width: 18px; height: 18px; }
+.pill.primary { background: var(--color-accent); color: var(--color-accent-ink); }
+.pill.primary:hover { background: var(--color-focus); }
+.pill.primary:active { background: var(--heat-3); }
+.pill.ghost { color: var(--color-ink); box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule-strong); }
+.pill.ghost:hover { background: var(--color-paper-2); }
+.pill.ghost:active { background: var(--color-paper-3); }
+.pill.danger { color: var(--color-error); box-shadow: inset 0 0 0 var(--rule-hair) color-mix(in oklab, var(--color-error) 45%, transparent); }
+.pill.danger:hover { background: color-mix(in oklab, var(--color-error) 12%, transparent); }
+.pill.small { min-height: 36px; padding: 0 var(--space-sm); }
+.pill.block { width: 100%; }
+.notice { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-well); background: var(--color-paper-2); border: var(--rule-hair) solid var(--color-rule); font-size: var(--text-sm); color: var(--color-ink-2); }
+.notice svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--color-muted); }
+.notice .grow { flex: 1; min-width: 0; }
+.notice.bad svg { color: var(--color-error); }
+
+@media (max-width: 600px) { #connectBtn { width: 44px; padding: 0; } #connectBtn span { display: none; } }
+
+/* ---------- the deck ---------- */
+#stage { flex: 1; min-height: 0; display: grid; place-items: center; touch-action: pan-y; }
+#grid { display: grid; gap: var(--gap, 12px); }
+.key {
+  --kc: var(--key-cream); --r: 22%;
+  position: relative; width: var(--k); height: var(--k); border-radius: var(--r);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--k) * 0.06); padding: calc(var(--k) * 0.09);
+  background: linear-gradient(to bottom, var(--color-paper-3), var(--color-paper-2));
+  border: var(--rule-hair) solid var(--color-rule); color: var(--color-ink-2);
+  box-shadow: inset 0 1px 0 var(--key-hi), inset 0 -3px 0 color-mix(in oklab, var(--kc) 55%, transparent), 0 3px 0 var(--key-lo);
+  overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none;
+  transition: transform var(--dur-micro) var(--ease-out), background-color var(--dur-short) var(--ease-out), box-shadow var(--dur-short) var(--ease-out);
+}
+#grid[data-shape="square"] .key { --r: 12%; }
+#grid[data-shape="round"] .key { --r: 50%; padding: calc(var(--k) * 0.16); }
+.key .ki { width: calc(var(--k) * 0.36 * var(--is, 1)); height: calc(var(--k) * 0.36 * var(--is, 1)); display: grid; place-items: center; flex: 0 0 auto; color: var(--ic, var(--kc)); }
+.key .ki svg { width: 100%; height: 100%; stroke-width: 1.75; }
+.key .ki .emo { font-size: calc(var(--k) * 0.32 * var(--is, 1)); line-height: 1; }
+.key .ki img { width: 100%; height: 100%; object-fit: contain; border-radius: 18%; }
+.key.nolabel .ki { width: calc(var(--k) * 0.48 * var(--is, 1)); height: calc(var(--k) * 0.48 * var(--is, 1)); }
+.key.nolabel .ki .emo { font-size: calc(var(--k) * 0.42 * var(--is, 1)); }
+.key .kl { font-size: clamp(10px, calc(var(--k) * 0.125), 15px); font-weight: 500; line-height: 1.15; text-align: center; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; position: relative; z-index: var(--z-raised); }
+.key .badge { position: absolute; top: 8%; right: 10%; font-size: clamp(11px, calc(var(--k) * 0.14), 18px); line-height: 1; color: var(--color-ink); z-index: var(--z-raised); }
+.key .hold { position: absolute; top: 10%; left: 11%; width: calc(var(--k) * 0.09); height: 2px; border-radius: 2px; background: var(--kc); opacity: 0.7; }
+.key.solid { background: var(--kc); color: var(--on-kc, var(--color-accent-ink)); border-color: transparent; box-shadow: inset 0 1px 0 var(--key-hi), 0 3px 0 var(--key-lo); }
+.key.solid .ki { color: var(--ic, currentColor); }
+.key.solid .badge { color: currentColor; }
+.key.imgfull .ki { position: absolute; inset: 0; width: 100%; height: 100%; }
+.key.imgfull .ki img { object-fit: cover; border-radius: 0; }
+.key.imgfull .kl { position: absolute; left: 0; right: 0; bottom: 0; padding: 18% 8% 8%; background: linear-gradient(to top, var(--shade), transparent); color: var(--color-ink); }
+.key:hover { background: linear-gradient(to bottom, var(--color-paper-4), var(--color-paper-3)); }
+.key.solid:hover { background: var(--kc); }
+.key.pressed { transform: translateY(2px) scale(0.97); background: color-mix(in oklab, var(--kc) 22%, var(--color-paper-2)); box-shadow: inset 0 1px 0 var(--key-hi), inset 0 -1px 0 var(--kc), 0 1px 0 var(--key-lo); }
+.key.solid.pressed { background: color-mix(in oklab, var(--kc) 82%, var(--color-paper)); }
+.key.live { --kc: var(--color-accent); background: var(--color-accent); color: var(--color-accent-ink); border-color: transparent; }
+.key.live .ki { color: currentColor; }
+.key.live .badge { color: currentColor; }
+.key.ok { outline: 2px solid color-mix(in oklab, var(--kc) 80%, transparent); outline-offset: 3px; }
+.key.err { outline: 2px solid var(--color-error); outline-offset: 3px; animation: shake var(--dur-short) var(--ease-out); }
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.key.empty { background: transparent; border: var(--rule-hair) dashed transparent; box-shadow: none; }
+body.editing .key.empty { border-color: var(--color-rule-strong); color: var(--color-muted); }
+body.editing .key:not(.empty) { outline: var(--rule-hair) solid var(--color-rule-strong); outline-offset: 3px; }
+.key.dragging { opacity: 0.3; }
+.key.drop { outline: 2px solid var(--color-focus) !important; outline-offset: 3px; }
+.ghost-key { position: fixed; z-index: var(--z-toast); pointer-events: none; transform: scale(1.06); box-shadow: var(--shadow-card); }
+.tabs { display: flex; gap: var(--space-2xs); justify-content: center; flex: 0 0 auto; overflow-x: auto; scrollbar-width: none; min-height: 44px; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs button { min-height: 40px; padding: 0 var(--space-sm); border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 500; color: var(--color-muted); white-space: nowrap; transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out); }
+.tabs button:hover { color: var(--color-ink); }
+.tabs button.cur { color: var(--color-ink); background: var(--color-paper-2); box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule); }
+.tabs .crumb { align-self: center; font-size: var(--text-sm); color: var(--color-muted); }
+.editbar { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-2xs) var(--space-2xs) var(--space-2xs) var(--space-md); border-radius: var(--radius-well); background: var(--color-paper-2); border: var(--rule-hair) solid var(--color-rule); font-size: var(--text-sm); color: var(--color-ink-2); }
+.editbar span { flex: 1; }
+
+/* ---------- sheets ---------- */
+.scrim { display: none; position: fixed; inset: 0; z-index: var(--z-modal); background: var(--scrim); opacity: 0; transition: opacity var(--dur-short) var(--ease-out); }
+.scrim.show { opacity: 1; }
+.sheet { position: fixed; z-index: var(--z-modal); left: 0; right: 0; bottom: 0; max-height: 92dvh; display: flex; flex-direction: column; background: var(--color-paper-2); border-top: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-card) var(--radius-card) 0 0; transform: translateY(100%); transition: transform var(--dur-long) var(--ease-out); }
+.sheet.show { transform: none; }
+@media (min-width: 900px) {
+  .sheet { left: auto; top: 0; bottom: 0; width: 460px; max-height: none; border-radius: 0; border-top: 0; border-left: var(--rule-hair) solid var(--color-rule); transform: translateX(100%); }
+  .sheet.center { left: 50%; top: 50%; bottom: auto; right: auto; width: 540px; max-height: 88vh; border-radius: var(--radius-card); border: 0; box-shadow: var(--shadow-card); transform: translate(-50%, -46%); opacity: 0; transition: opacity var(--dur-short) var(--ease-out), transform var(--dur-short) var(--ease-out); }
+  .sheet.center.show { transform: translate(-50%, -50%); opacity: 1; }
+  .grab { display: none; }
+}
+.grab { width: 40px; height: 4px; border-radius: 2px; background: var(--color-rule-strong); margin: var(--space-xs) auto 0; flex: 0 0 auto; }
+.sh-head { display: flex; align-items: center; gap: var(--space-xs); padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-lg); }
+.sh-head h2 { flex: 1; font-size: var(--text-2xl); }
+.sh-body { overflow-y: auto; padding: var(--space-xs) var(--space-lg) calc(var(--safe-b) + var(--space-lg)); -webkit-overflow-scrolling: touch; }
+.sh-foot { display: flex; align-items: center; gap: var(--space-xs); padding: var(--space-sm) var(--space-lg) calc(var(--safe-b) + var(--space-sm)); border-top: var(--rule-hair) solid var(--color-rule); }
+
+/* ---------- forms ---------- */
+.sec { padding: var(--space-md) 0; border-top: var(--rule-hair) solid var(--color-rule); }
+.sec:first-child { border-top: 0; padding-top: 0; }
+.sec > h3 { font-family: var(--font-body); letter-spacing: 0; font-weight: 500; font-size: var(--text-sm); color: var(--color-muted); margin-bottom: var(--space-sm); }
+.field { margin-bottom: var(--space-md); }
+.field:last-child { margin-bottom: 0; }
+.field > label, .lbl { display: block; font-size: var(--text-sm); font-weight: 500; color: var(--color-muted); margin-bottom: var(--space-xs); }
+.hint { font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-xs); line-height: 1.45; }
+.inp { width: 100%; min-height: 44px; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-well); background: var(--color-paper); border: var(--rule-hair) solid var(--color-rule); outline: none; transition: border-color var(--dur-short) var(--ease-out); }
+.inp:hover { border-color: var(--color-rule-strong); }
+.inp:focus { border-color: var(--color-focus); }
+.inp:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.inp:disabled { background: var(--color-paper-3); color: var(--color-muted); cursor: not-allowed; }
+textarea.inp { min-height: 92px; resize: vertical; line-height: 1.45; }
+.inp.mono { font-family: var(--font-outlier); font-size: var(--text-sm); }
+input[type="range"] { accent-color: var(--color-accent); width: 100%; min-height: 32px; }
+.row { display: flex; gap: var(--space-xs); align-items: center; }
+.row.wrap { flex-wrap: wrap; }
+.row > .grow { flex: 1; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.chip { min-height: 36px; padding: 0 var(--space-sm); border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 500; color: var(--color-ink-2); display: inline-flex; align-items: center; gap: var(--space-xs); box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule); transition: background-color var(--dur-short) var(--ease-out); }
+.chip:hover { background: var(--color-paper-3); }
+.chip.on { background: var(--color-ink); color: var(--color-paper); box-shadow: none; }
+.chip svg { width: 16px; height: 16px; }
+.types { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 124px), 1fr)); gap: var(--space-xs); }
+.type { min-height: 72px; padding: var(--space-sm); border-radius: var(--radius-well); background: var(--color-paper); border: var(--rule-hair) solid var(--color-rule); display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: var(--space-xs); font-size: var(--text-sm); font-weight: 500; text-align: left; transition: border-color var(--dur-short) var(--ease-out); }
+.type:hover { border-color: var(--color-rule-strong); }
+.type svg { width: 20px; height: 20px; color: var(--color-muted); }
+.type.on { border-color: var(--color-accent); }
+.type.on svg { color: var(--color-accent); }
+.lights { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.light { width: 40px; height: 40px; border-radius: var(--radius-pill); display: grid; place-items: center; background: var(--color-paper); box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule); }
+.light::before { content: ""; width: 20px; height: 20px; border-radius: var(--radius-pill); background: var(--sw); }
+.light.on { box-shadow: inset 0 0 0 2px var(--color-ink); }
+.light.custom { position: relative; overflow: hidden; }
+.light.custom::before { background: conic-gradient(var(--heat-2), var(--heat-3), var(--heat-4), var(--heat-5), var(--heat-6), var(--heat-2)); }
+.light.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.light.auto::before { background: transparent; box-shadow: inset 0 0 0 2px var(--color-muted); }
+.seg { display: inline-flex; padding: var(--space-3xs); border-radius: var(--radius-pill); background: var(--color-paper); border: var(--rule-hair) solid var(--color-rule); gap: var(--space-3xs); flex-wrap: wrap; }
+.seg button { min-height: 36px; padding: 0 var(--space-sm); border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 500; color: var(--color-muted); }
+.seg button:hover { color: var(--color-ink); }
+.seg button.on { background: var(--color-paper-3); color: var(--color-ink); box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule); }
+.icongrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: var(--space-2xs); max-height: 264px; overflow-y: auto; padding: var(--space-3xs); margin-top: var(--space-xs); }
+.icongrid button { height: 48px; border-radius: 12px; display: grid; place-items: center; color: var(--color-ink-2); }
+.icongrid button:hover { background: var(--color-paper-3); }
+.icongrid button.on { background: var(--color-ink); color: var(--color-paper); }
+.icongrid button svg { width: 22px; height: 22px; }
+.icongrid .more { grid-column: 1 / -1; height: 40px; font-size: var(--text-sm); color: var(--color-muted); }
+.preview { display: flex; justify-content: center; padding: var(--space-xs) 0 var(--space-lg); }
+.steps { display: flex; flex-direction: column; gap: var(--space-xs); }
+.step { padding: var(--space-sm); border-radius: var(--radius-well); background: var(--color-paper); border: var(--rule-hair) solid var(--color-rule); }
+.step-head { display: flex; align-items: center; gap: var(--space-2xs); margin-bottom: var(--space-sm); }
+.step-head .n { font-family: var(--font-display); font-size: var(--text-lg); width: 28px; text-align: center; color: var(--color-muted); }
+.step-head select { flex: 1; }
+.step .round { width: 36px; height: 36px; box-shadow: none; }
+.step .round svg { width: 18px; height: 18px; }
+.sub-box { padding: var(--space-sm); border-radius: var(--radius-well); border: var(--rule-hair) solid var(--color-rule); margin-top: var(--space-xs); }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); min-height: 52px; }
+.toggle-row + .toggle-row { border-top: var(--rule-hair) solid var(--color-rule); }
+.toggle-row .t { font-weight: 500; }
+.toggle-row .d { font-size: var(--text-sm); color: var(--color-muted); }
+.switch { position: relative; width: 48px; height: 28px; flex: 0 0 auto; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.switch span { position: absolute; inset: 0; border-radius: var(--radius-pill); background: var(--color-paper-4); pointer-events: none; transition: background-color var(--dur-short) var(--ease-out); }
+.switch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--color-ink); transition: transform var(--dur-short) var(--ease-out); }
+.switch input:checked + span { background: var(--color-accent); }
+.switch input:checked + span::after { transform: translateX(20px); background: var(--color-accent-ink); }
+.switch input:focus-visible + span { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.list { display: flex; flex-direction: column; }
+.li { display: flex; align-items: center; gap: var(--space-xs); min-height: 52px; border-bottom: var(--rule-hair) solid var(--color-rule); }
+.li:last-child { border-bottom: 0; }
+.li > svg, .li > span > svg { width: 20px; height: 20px; flex: 0 0 auto; color: var(--color-muted); }
+.li .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.li .round { width: 40px; height: 40px; box-shadow: none; }
+.li .round svg { width: 18px; height: 18px; }
+.li .name { border: 0; background: transparent; min-height: 44px; padding: 0; outline: none; }
+.li .name:focus-visible { outline: 2px solid var(--color-focus); }
+.applist { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; margin-top: var(--space-xs); }
+.applist button { display: flex; align-items: center; gap: var(--space-sm); text-align: left; padding: var(--space-xs) var(--space-sm); border-radius: 12px; min-height: 44px; }
+.applist button:hover { background: var(--color-paper-3); }
+.kbd { font-family: var(--font-outlier); font-size: var(--text-sm); padding: var(--space-3xs) var(--space-xs); border-radius: 8px; background: var(--color-paper-3); }
+.picker { position: sticky; top: calc(var(--space-xs) * -1); z-index: var(--z-raised); background: var(--color-paper-2); padding: var(--space-xs) 0 var(--space-sm); border-bottom: var(--rule-hair) solid var(--color-rule); margin-bottom: var(--space-md); }
+
+/* ---------- pair + connect ---------- */
+.screen { position: fixed; inset: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-lg); padding: calc(var(--safe-t) + var(--space-lg)) var(--space-lg) calc(var(--safe-b) + var(--space-lg)); text-align: center; }
+.mark { width: 56px; height: 56px; color: var(--color-ink); }
+.screen h1 { font-size: var(--text-3xl); max-width: 14ch; }
+.screen p { color: var(--color-muted); max-width: 46ch; }
+.pinboxes { display: flex; gap: var(--space-xs); }
+.pinboxes div { width: 46px; height: 60px; border-radius: 14px; background: var(--color-paper-2); border: var(--rule-hair) solid var(--color-rule); display: grid; place-items: center; font-family: var(--font-display); font-size: var(--text-3xl); line-height: 1; }
+.pinboxes div.f { border-color: var(--color-focus); }
+.pinboxes.bad { animation: shake var(--dur-short) var(--ease-out); }
+.numpad { display: grid; grid-template-columns: repeat(3, 76px); gap: var(--space-sm); }
+.numpad button { height: 64px; border-radius: 20px; font-family: var(--font-display); font-size: var(--text-2xl); font-variant-numeric: tabular-nums; background: linear-gradient(to bottom, var(--color-paper-3), var(--color-paper-2)); border: var(--rule-hair) solid var(--color-rule); box-shadow: inset 0 1px 0 var(--key-hi), 0 3px 0 var(--key-lo); transition: transform var(--dur-micro) var(--ease-out); }
+.numpad button:active { transform: translateY(2px); }
+.numpad svg { width: 22px; height: 22px; margin: auto; }
+.err-text { color: var(--color-error); min-height: 22px; font-size: var(--text-sm); }
+.connect { display: grid; gap: var(--space-lg); }
+.connect .top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-lg); align-items: center; }
+@media (max-width: 520px) { .connect .top { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; } }
+.qrbox { background: var(--qr-light); color: var(--qr-dark); border-radius: 20px; padding: var(--space-sm); width: 204px; }
+.qrbox svg { width: 180px; height: 180px; }
+.qrbox svg rect { fill: var(--qr-light); }
+.qrbox svg path { fill: var(--qr-dark); }
+.bigpin { font-size: var(--text-4xl); line-height: 1; letter-spacing: 0.04em; }
+.url { font-family: var(--font-outlier); font-size: var(--text-sm); color: var(--color-ink-2); overflow-wrap: anywhere; }
+.steps-list { margin: 0; padding-left: 1.2em; color: var(--color-ink-2); line-height: 1.6; text-align: left; }
+.steps-list li + li { margin-top: var(--space-2xs); }
+details summary { cursor: pointer; color: var(--color-muted); min-height: 44px; display: flex; align-items: center; }
+.toast { pointer-events: none; position: fixed; z-index: var(--z-toast); left: 50%; bottom: calc(var(--safe-b) + var(--space-xl)); transform: translate(-50%, 12px); opacity: 0; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-pill); background: var(--color-ink); color: var(--color-paper); font-size: var(--text-sm); font-weight: 500; max-width: 90vw; transition: opacity var(--dur-short) var(--ease-out), transform var(--dur-short) var(--ease-out); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.bad { background: var(--color-error); color: var(--on-light); }
+.dialog-actions { display: flex; gap: var(--space-xs); justify-content: flex-end; margin-top: var(--space-lg); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
+</style>
+</head>
+<body>
+<noscript><p style="padding:24px">PocketDeck needs JavaScript turned on.</p></noscript>
+<div id="app" class="hidden">
+  <header class="bar">
+    <button class="round hidden" id="backBtn" aria-label="Back"></button>
+    <div class="where"><h1 id="pageTitle">PocketDeck</h1><p class="status" id="status">Connecting</p></div>
+    <button class="pill ghost hidden" id="connectBtn"></button>
+    <button class="round" id="editBtn" aria-label="Edit keys"></button>
+    <button class="round" id="settingsBtn" aria-label="Settings"></button>
+  </header>
+  <div id="banners"></div>
+  <div class="editbar hidden" id="editbar"><span>Tap a key to change it. Drag to move it.</span><button class="pill primary small" id="doneBtn">Done</button></div>
+  <main id="stage"><div id="grid"></div></main>
+  <nav class="tabs" id="pages" aria-label="Pages"></nav>
+</div>
+
+<div id="pair" class="screen hidden">
+  <div class="mark" id="pairMark"></div>
+  <h1>Pair with your PC</h1>
+  <p>Type the PIN shown on your PC. Open PocketDeck there and choose Connect a phone.</p>
+  <div class="pinboxes" id="pinboxes" aria-live="polite"></div>
+  <div class="err-text" id="pinErr" role="alert"></div>
+  <div class="numpad" id="numpad"></div>
+</div>
+
+<div id="loading" class="screen"><div class="mark" id="loadMark"></div><p id="loadText">Looking for your PC</p></div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle">
+  <div class="grab"></div>
+  <div class="sh-head"><h2 id="shTitle"></h2><button class="round" id="shClose" aria-label="Close"></button></div>
+  <div class="sh-body" id="shBody"></div>
+  <div class="sh-foot hidden" id="shFoot"></div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<label id="hapticLabel" class="hidden"><input type="checkbox" switch id="hapticSwitch"></label>
+<video id="nosleep" playsinline muted loop class="hidden"></video>
+<script>
+const ICONS = /*@ICONS@*/{};
+const ICON_TAGS = /*@TAGS@*/{};
+/*@QR@*/
+const NOSLEEP_MP4 = "/*@VIDEO@*/";
+
+/* ============================================================ helpers */
+const $ = s => document.querySelector(s);
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} }
+};
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k.startsWith('on')) el.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === 'class') el.className = v;
+    else if (k === 'html') el.innerHTML = v;
+    else if (k === 'style') el.style.cssText = v;
+    else if (k === 'value' || k === 'checked' || k === 'selected') el[k] = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat(9)) if (c != null && c !== false) el.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return el;
+}
+function svg(name) {
+  const inner = ICONS[name] || ICONS['square'];
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+}
+const I = name => h('span', { html: svg(name), style: 'display:contents' });
+const uid = () => Math.random().toString(36).slice(2, 9);
+const clone = o => JSON.parse(JSON.stringify(o));
+function lum(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return 0;
+  const n = parseInt(m[1], 16), c = [n >> 16, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
+  return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+}
+
+/* key lights: a preset name ('k:ember') or a custom '#rrggbb' */
+const LIGHTS = [['cream', 'Cream', .92], ['ember', 'Ember', .70], ['amber', 'Amber', .82], ['whiteheat', 'White heat', .96], ['oxblood', 'Oxblood', .58], ['rose', 'Rose', .74],
+  ['sage', 'Sage', .78], ['teal', 'Teal', .76], ['sky', 'Sky', .76], ['iris', 'Iris', .72], ['stone', 'Stone', .66], ['ash', 'Ash', .44]];
+const LIGHT_L = Object.fromEntries(LIGHTS.map(([n, , l]) => [n, l]));
+function cssColor(c) { if (!c) return ''; if (c.startsWith('k:')) return `var(--key-${c.slice(2)})`; return /^#[0-9a-f]{6}$/i.test(c) ? c : ''; }
+function isLight(c) { if (!c) return true; if (c.startsWith('k:')) return (LIGHT_L[c.slice(2)] || .9) >= .7; return lum(c) > .4; }
+/* v1 saved colours, keyed without the hash, mapped to the new key lights */
+const OLD_HEX_RAW = { '1b2336': 'cream', '334155': 'stone', '0f766e': 'teal', '16a34a': 'sage', '22c55e': 'sage', '0ea5e9': 'sky', '2563eb': 'sky', '6366f1': 'iris', '4f46e5': 'iris', '9333ea': 'iris', 'db2777': 'rose', 'dc2626': 'oxblood', 'ea580c': 'ember', 'ca8a04': 'amber', ['0000' + '00']: 'ash', 'f8fafc': 'whiteheat' };
+const OLD_HEX = Object.fromEntries(Object.entries(OLD_HEX_RAW).map(([k, v]) => ['#' + k, v]));
+const MARK = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="3" y="3" width="42" height="42" rx="12" stroke="currentColor" stroke-width="2"/><rect x="11" y="11" width="11" height="11" rx="3.5" fill="currentColor"/><rect x="26" y="11" width="11" height="11" rx="3.5" fill="currentColor" opacity=".45"/><rect x="11" y="26" width="11" height="11" rx="3.5" fill="currentColor" opacity=".45"/><rect x="26" y="26" width="11" height="11" rx="3.5" fill="var(--color-accent)"/></svg>';
+
+let toastT;
+function toast(msg, bad) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast show' + (bad ? ' bad' : '');
+  clearTimeout(toastT); toastT = setTimeout(() => t.className = 'toast' + (bad ? ' bad' : ''), bad ? 3500 : 1800);
+}
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isAndroid = /Android/i.test(navigator.userAgent);
+
+/* ============================================================ api */
+const S = {
+  token: LS.get('pd.token', ''), local: false, pc: '', profile: null, rev: '', pageId: null, stack: [],
+  editing: false, live: {}, toggles: LS.get('pd.toggles', {}), online: true, paused: false, fails: 0, clip: null
+};
+async function api(path, { method = 'GET', body, timeout = 6000 } = {}) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
+  try {
+    const r = await fetch(path, {
+      method, signal: ctl.signal, cache: 'no-store',
+      headers: { 'X-Deck': '1', 'X-Deck-Token': S.token, 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : (typeof body === 'string' ? body : JSON.stringify(body))
+    });
+    let data = {}; try { data = await r.json(); } catch {}
+    if (r.status === 401 && path !== '/api/pair') { showPair(); throw new Error('Not paired'); }
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    return data;
+  } finally { clearTimeout(t); }
+}
+
+/* ============================================================ model */
+const LAYOUTS = { 6: [2, 3], 8: [2, 4], 12: [3, 4], 15: [3, 5], 20: [4, 5], 24: [4, 6], 32: [4, 8] };
+const K = (label, icon, color, action, extra) => Object.assign({ label, icon: 'i:' + icon, color: 'k:' + (OLD_HEX[String(color).toLowerCase()] || color), action }, extra || {});
+const hk = keys => ({ type: 'hotkey', keys });
+const DEFAULT_SETTINGS = { layout: 15, labels: true, haptics: true, awake: true, confirm: true, gap: 12, theme: 'ember', shape: 'rounded', keyStyle: 'backlit' };
+
+function defaultProfile() {
+  const apps = { id: uid(), name: 'Apps', folder: true, keys: [
+    K('Explorer', 'folder-open', '#CA8A04', { type: 'system', cmd: 'explorer' }),
+    K('Browser', 'globe', '#2563EB', { type: 'url', target: 'https://www.google.com' }),
+    K('Calculator', 'calculator', '#334155', { type: 'open', target: 'calc.exe' }),
+    K('Notepad', 'notebook-pen', '#334155', { type: 'open', target: 'notepad.exe' }),
+    K('Settings', 'settings', '#334155', { type: 'system', cmd: 'settings' }),
+    K('Task Manager', 'cpu', '#334155', { type: 'system', cmd: 'taskmgr' }),
+    K('YouTube', 'youtube', '#DC2626', { type: 'url', target: 'https://youtube.com' }),
+    K('Gmail', 'mail', '#EA580C', { type: 'url', target: 'https://mail.google.com' })
+  ] };
+  const work = { id: uid(), name: 'Work', keys: [
+    K('Switch app', 'app-window', '#334155', hk('alt+tab')),
+    K('Task view', 'layout-grid', '#334155', hk('win+tab')),
+    K('Desktop ←', 'chevron-left', '#334155', hk('ctrl+win+left')),
+    K('Desktop →', 'chevron-right', '#334155', hk('ctrl+win+right')),
+    K('Snap left', 'arrow-left', '#1B2336', hk('win+left')),
+    K('Snap right', 'arrow-right', '#1B2336', hk('win+right')),
+    K('New tab', 'plus', '#2563EB', hk('ctrl+t')),
+    K('Close tab', 'x', '#2563EB', hk('ctrl+w')),
+    K('Reopen tab', 'rotate-ccw', '#2563EB', hk('ctrl+shift+t')),
+    K('Clipboard', 'clipboard-paste', '#6366F1', hk('win+v')),
+    K('Emoji', 'smile', '#6366F1', hk('win+.')),
+    K('Save', 'save', '#16A34A', hk('ctrl+s')),
+    K('Find', 'search', '#1B2336', hk('ctrl+f')),
+    K('Reply snippet', 'message-square', '#0F766E', { type: 'text', text: "Thanks! I'll get back to you shortly.", enter: false }),
+    K('Start my day', 'rocket', '#9333EA', { type: 'multi', steps: [
+      { type: 'url', target: 'https://mail.google.com' }, { type: 'delay', ms: 600 },
+      { type: 'url', target: 'https://calendar.google.com' }, { type: 'delay', ms: 300 },
+      { type: 'audio', op: 'set', value: 30 }
+    ] })
+  ] };
+  const main = { id: uid(), name: 'Main', keys: [
+    K('Prev', 'skip-back', '#1B2336', { type: 'media', key: 'prev' }),
+    K('Play / Pause', 'play', 'ember', { type: 'media', key: 'playpause' }),
+    K('Next', 'skip-forward', '#1B2336', { type: 'media', key: 'next' }),
+    K('Vol −', 'volume-1', '#334155', { type: 'audio', op: 'down', value: 5 }),
+    K('Mute', 'volume-2', '#334155', { type: 'audio', op: 'mute' }),
+    K('Vol +', 'volume-2', '#334155', { type: 'audio', op: 'up', value: 5 }),
+    K('Mic', 'mic', 'cream', { type: 'audio', op: 'micmute' }),
+    K('Screenshot', 'scan', '#6366F1', { type: 'system', cmd: 'screenshot' }),
+    K('Lock PC', 'lock', 'oxblood', { type: 'system', cmd: 'lock' }),
+    K('Copy', 'copy', '#1B2336', hk('ctrl+c')),
+    K('Paste', 'clipboard-paste', '#1B2336', hk('ctrl+v')),
+    K('Undo', 'undo-2', '#1B2336', hk('ctrl+z')),
+    K('Apps', 'folder', 'amber', { type: 'folder', page: apps.id }),
+    K('Show desktop', 'monitor', '#334155', { type: 'system', cmd: 'showdesktop' }),
+    K('Work page', 'briefcase', 'whiteheat', { type: 'page', page: work.id })
+  ] };
+  return { v: 1, settings: clone(DEFAULT_SETTINGS), pages: [main, work, apps] };
+}
+
+const TEMPLATES = {
+  calls: { name: 'Video calls', icon: 'video', make: () => ({ id: uid(), name: 'Calls', keys: [
+    K('Teams mic', 'mic-off', '#6366F1', hk('ctrl+shift+m')), K('Teams cam', 'video-off', '#6366F1', hk('ctrl+shift+o')), K('Teams hand', 'hand', '#6366F1', hk('ctrl+shift+k')),
+    K('Zoom mic', 'mic-off', '#2563EB', hk('alt+a')), K('Zoom cam', 'video-off', '#2563EB', hk('alt+v')), K('Zoom share', 'screen-share', '#2563EB', hk('alt+s')),
+    K('Meet mic', 'mic-off', '#16A34A', hk('ctrl+d')), K('Meet cam', 'video-off', '#16A34A', hk('ctrl+e')), K('Meet hand', 'hand', '#16A34A', hk('ctrl+alt+h')),
+    K('Discord mic', 'mic-off', '#4F46E5', hk('ctrl+shift+m')), K('Discord deafen', 'headphones', '#4F46E5', hk('ctrl+shift+d')), K('PC mic', 'mic', '#0F766E', { type: 'audio', op: 'micmute' }),
+    K('Leave call', 'phone', '#DC2626', hk('ctrl+shift+h'))
+  ] }) },
+  stream: { name: 'Streaming (OBS)', icon: 'radio', make: () => ({ id: uid(), name: 'Stream', keys: [
+    K('Go live', 'radio', '#DC2626', hk('ctrl+shift+f9')), K('Record', 'circle-dot', '#DC2626', hk('ctrl+shift+f10')), K('Pause rec', 'pause', '#EA580C', hk('ctrl+shift+f11')),
+    K('Scene 1', 'clapperboard', '#9333EA', hk('ctrl+shift+f1')), K('Scene 2', 'clapperboard', '#9333EA', hk('ctrl+shift+f2')), K('Scene 3', 'clapperboard', '#9333EA', hk('ctrl+shift+f3')),
+    K('BRB', 'coffee', '#CA8A04', hk('ctrl+shift+f4')), K('Starting', 'timer', '#CA8A04', hk('ctrl+shift+f5')), K('Ending', 'flag', '#CA8A04', hk('ctrl+shift+f6')),
+    K('Mic', 'mic', '#0F766E', { type: 'audio', op: 'micmute' }), K('Cam', 'video', '#0F766E', hk('ctrl+shift+f7')), K('Replay', 'rotate-ccw', '#2563EB', hk('ctrl+shift+f8')),
+    K('Chat hi', 'message-circle', '#334155', { type: 'text', text: 'Welcome in! 👋', enter: true })
+  ] }) },
+  edit: { name: 'Photo / video editing', icon: 'film', make: () => ({ id: uid(), name: 'Editing', keys: [
+    K('Undo', 'undo-2', '#334155', hk('ctrl+z')), K('Redo', 'redo-2', '#334155', hk('ctrl+shift+z')), K('Save', 'save', '#16A34A', hk('ctrl+s')),
+    K('Cut', 'scissors', '#9333EA', hk('ctrl+k')), K('Ripple del', 'trash-2', '#DC2626', hk('shift+delete')), K('Play', 'play', '#16A34A', hk('space')),
+    K('Zoom in', 'plus', '#2563EB', hk('=')), K('Zoom out', 'minus', '#2563EB', hk('-')), K('Fit', 'maximize', '#2563EB', hk('\\')),
+    K('Brush', 'brush', '#CA8A04', hk('b')), K('Eraser', 'eraser', '#CA8A04', hk('e')), K('Export', 'upload', '#EA580C', hk('ctrl+m'))
+  ] }) },
+  code: { name: 'Coding', icon: 'code', make: () => ({ id: uid(), name: 'Code', keys: [
+    K('Terminal', 'terminal', '#0F766E', hk('ctrl+`')), K('Cmd palette', 'command', '#2563EB', hk('ctrl+shift+p')), K('Find file', 'search', '#2563EB', hk('ctrl+p')),
+    K('Comment', 'code', '#334155', hk('ctrl+/')), K('Format', 'braces', '#334155', hk('shift+alt+f')), K('Rename', 'pencil', '#334155', hk('f2')),
+    K('Run', 'play', '#16A34A', hk('f5')), K('Stop', 'square', '#DC2626', hk('shift+f5')), K('Step', 'arrow-right', '#CA8A04', hk('f10')),
+    K('Git status', 'github', '#1B2336', { type: 'text', text: 'git status', enter: true }), K('Save all', 'save', '#16A34A', hk('ctrl+k, s')), K('Sidebar', 'panels-top-left', '#334155', hk('ctrl+b'))
+  ] }) }
+};
+
+function P() { return S.profile; }
+function settings() { return Object.assign({}, DEFAULT_SETTINGS, P().settings || {}); }
+function page(id) { return P().pages.find(p => p.id === id); }
+function topPages() { return P().pages.filter(p => !p.folder); }
+function curPage() { return page(S.pageId) || topPages()[0] || P().pages[0]; }
+function slots() { return +settings().layout || 15; }
+
+let saveT;
+async function saveNow() {
+  clearTimeout(saveT); LS.set('pd.profile', S.profile);
+  try { const r = await api('/api/profile', { method: 'PUT', body: S.profile }); S.rev = r.rev || S.rev; }
+  catch (e) { toast('Could not save to PC: ' + e.message, true); }
+}
+function save() {
+  LS.set('pd.profile', S.profile);
+  clearTimeout(saveT);
+  saveT = setTimeout(async () => {
+    try { const r = await api('/api/profile', { method: 'PUT', body: S.profile }); S.rev = r.rev || S.rev; }
+    catch (e) { toast('Could not save to PC: ' + e.message, true); }
+  }, 350);
+}
+
+/* ============================================================ boot */
+async function boot() {
+  wireStatic();
+  $('#pairMark').innerHTML = MARK; $('#loadMark').innerHTML = MARK;
+  const params = new URLSearchParams(location.search);
+  const qpin = params.get('pin');
+  if (qpin) history.replaceState(null, '', location.pathname + location.hash);
+  let hello;
+  try { hello = await api('/api/hello'); }
+  catch (e) { $('#loadText').textContent = 'Can’t reach your PC. Check that PocketDeck is running there and you are on the same Wi-Fi.'; setTimeout(boot, 4000); return; }
+  S.local = hello.local; S.pc = hello.pc; S.paused = hello.paused;
+  if (!hello.paired && qpin) { if (await tryPair(qpin)) hello.paired = true; }
+  if (!hello.paired) { showPair(); return; }
+  await loadProfile();
+  startDeck();
+  if (S.local && (location.hash === '#connect')) openConnect();
+}
+
+async function loadProfile() {
+  try {
+    const r = await api('/api/profile');
+    S.rev = r.rev;
+    S.profile = r.profile;
+  } catch (e) { S.profile = LS.get('pd.profile', null); }
+  if (!S.profile || !Array.isArray(S.profile.pages) || !S.profile.pages.length) { S.profile = defaultProfile(); save(); }
+  S.profile.settings = Object.assign({}, DEFAULT_SETTINGS, S.profile.settings || {});
+  migrate(S.profile);
+  LS.set('pd.profile', S.profile);
+  if (!page(S.pageId)) { S.pageId = LS.get('pd.page', null); if (!page(S.pageId) || page(S.pageId).folder) S.pageId = topPages()[0] && topPages()[0].id; S.stack = []; }
+}
+
+function migrate(p) {
+  if (p.settings.oled) { p.settings.theme = 'carbon'; delete p.settings.oled; }
+  const fix = o => { if (o && o.color && /^#/.test(o.color) && OLD_HEX[o.color.toLowerCase()]) o.color = 'k:' + OLD_HEX[o.color.toLowerCase()]; };
+  p.pages.forEach(pg => (pg.keys || []).forEach(k => { if (k) { fix(k); fix(k.alt); } }));
+}
+
+function startDeck() {
+  $('#loading').classList.add('hidden'); $('#pair').classList.add('hidden'); $('#app').classList.remove('hidden');
+  $('#connectBtn').classList.toggle('hidden', !S.local);
+  render();
+  poll(); clearInterval(S.pollT); S.pollT = setInterval(poll, 2000);
+  setupAwake();
+}
+
+/* ============================================================ pairing */
+let pin = '';
+function showPair() {
+  clearInterval(S.pollT);
+  $('#loading').classList.add('hidden'); $('#app').classList.add('hidden'); $('#pair').classList.remove('hidden');
+  pin = ''; drawPin();
+  const pad = $('#numpad'); pad.innerHTML = '';
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].forEach(d => {
+    if (!d) { pad.append(h('span')); return; }
+    pad.append(h('button', { 'aria-label': d === '⌫' ? 'Delete' : d, html: d === '⌫' ? svg('arrow-left') : d, onclick: () => pinKey(d) }));
+  });
+}
+function drawPin() {
+  const b = $('#pinboxes'); b.innerHTML = '';
+  for (let i = 0; i < 6; i++) b.append(h('div', { class: i === pin.length ? 'f' : '' }, pin[i] || ''));
+}
+async function pinKey(d) {
+  haptic();
+  if (d === '⌫') pin = pin.slice(0, -1); else if (pin.length < 6) pin += d;
+  $('#pinErr').textContent = ''; drawPin();
+  if (pin.length === 6) {
+    if (await tryPair(pin)) { await loadProfile(); startDeck(); if (!S.local) setTimeout(openPhoneTips, 400); }
+    else { $('#pinboxes').classList.add('bad'); setTimeout(() => $('#pinboxes').classList.remove('bad'), 350); pin = ''; setTimeout(drawPin, 350); }
+  }
+}
+window.addEventListener('keydown', e => { if (!$('#pair').classList.contains('hidden')) { if (/^\d$/.test(e.key)) pinKey(e.key); else if (e.key === 'Backspace') pinKey('⌫'); } });
+async function tryPair(p) {
+  const device = isIOS ? 'iPhone' : isAndroid ? 'Android phone' : 'Browser';
+  try {
+    const r = await api('/api/pair', { method: 'POST', body: { pin: p, device } });
+    S.token = r.token; LS.set('pd.token', r.token); S.pc = r.pc; return true;
+  } catch (e) { $('#pinErr').textContent = e.message; return false; }
+}
+
+/* ============================================================ render deck */
+function dims() {
+  const [a, b] = LAYOUTS[slots()] || LAYOUTS[15];
+  const st = $('#stage'); const W = st.clientWidth, H = st.clientHeight;
+  const landscape = W > H;
+  const cols = landscape ? b : a, rows = landscape ? a : b;
+  const gap = Math.max(4, Math.min(+settings().gap || 10, 24));
+  const k = Math.floor(Math.min((W - gap * (cols - 1)) / cols, (H - gap * (rows - 1)) / rows, 220));
+  return { cols, rows, k: Math.max(k, 40), gap };
+}
+
+function applyLook() {
+  const st = settings();
+  document.documentElement.dataset.theme = st.theme || 'ember';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue('--color-paper').trim() || meta.content;
+}
+function render() {
+  const pg = curPage(); if (!pg) return;
+  S.pageId = pg.id; if (!pg.folder) LS.set('pd.page', pg.id);
+  applyLook();
+  document.body.classList.toggle('editing', S.editing);
+  $('#pageTitle').textContent = pg.name;
+  $('#backBtn').classList.toggle('hidden', !pg.folder);
+  $('#editBtn').classList.toggle('hidden', S.editing);
+  $('#editbar').classList.toggle('hidden', !S.editing);
+  renderBanners();
+  const { cols, k, gap } = dims();
+  const g = $('#grid');
+  g.dataset.shape = settings().shape || 'rounded';
+  g.style.gridTemplateColumns = `repeat(${cols}, ${k}px)`;
+  g.style.setProperty('--k', k + 'px'); g.style.setProperty('--gap', gap + 'px');
+  g.innerHTML = '';
+  const n = slots();
+  for (let i = 0; i < n; i++) g.append(keyEl(pg.keys[i], i));
+  const tabs = $('#pages'); tabs.innerHTML = '';
+  if (pg.folder) {
+    const parent = page(S.stack[S.stack.length - 1]);
+    tabs.append(h('span', { class: 'crumb' }, `Folder in ${parent ? parent.name : 'your deck'}`));
+  } else if (topPages().length > 1) {
+    topPages().forEach(p => tabs.append(h('button', { class: p.id === pg.id ? 'cur' : '', 'aria-current': p.id === pg.id ? 'page' : null, onclick: () => goPage(p.id) }, p.name)));
+  }
+}
+
+function keyVisual(key) {
+  let label = key.label, icon = key.icon, color = key.color || 'k:cream', iconColor = key.iconColor || '', badge = '', live = false;
+  const a = key.action || {};
+  if (a.type === 'toggle' && S.toggles[keyId(key)] && key.alt) {
+    label = key.alt.label ? key.alt.label : label;
+    icon = key.alt.icon || icon; color = key.alt.color || color;
+  }
+  if (a.type === 'audio') {
+    const L = S.live;
+    if (a.op === 'mute' && L.muted) { icon = 'i:volume-x'; live = true; }
+    if (a.op === 'micmute' && L.micMuted) { icon = 'i:mic-off'; live = true; label = (label || 'Mic') + ' off'; }
+    if ((a.op === 'up' || a.op === 'down' || a.op === 'set' || a.op === 'mute') && L.volume != null) badge = String(L.volume);
+  }
+  return { label, icon, color, iconColor, badge, live };
+}
+function keyId(key) { if (!key._id) key._id = uid(); return key._id; }
+
+function iconNode(icon) {
+  if (!icon) return null;
+  if (icon.startsWith('i:')) return h('div', { class: 'ki', html: svg(icon.slice(2)) });
+  if (icon.startsWith('e:')) return h('div', { class: 'ki' }, h('span', { class: 'emo' }, icon.slice(2)));
+  if (icon.startsWith('data:')) return h('div', { class: 'ki' }, h('img', { src: icon, alt: '' }));
+  return null;
+}
+
+function keyEl(key, i) {
+  if (!key) {
+    const el = h('button', { class: 'key empty', 'data-i': i, 'aria-label': 'Empty key' });
+    if (S.editing) el.append(h('div', { class: 'ki', html: svg('plus') }));
+    bindKey(el, null, i);
+    return el;
+  }
+  const v = keyVisual(key);
+  const showLabel = settings().labels && !key.hideLabel && v.label;
+  const full = v.icon && v.icon.startsWith('data:') && key.imgFull;
+  const solid = (key.style || settings().keyStyle) === 'solid';
+  const vars = [`--kc:${cssColor(v.color) || 'var(--key-cream)'}`];
+  if (v.iconColor) vars.push(`--ic:${cssColor(v.iconColor)}`);
+  if (key.iconScale && key.iconScale !== 1) vars.push(`--is:${key.iconScale}`);
+  if (solid) vars.push(`--on-kc:${isLight(v.color) ? 'var(--on-light)' : 'var(--on-dark)'}`);
+  const el = h('button', {
+    class: 'key' + (solid ? ' solid' : '') + (showLabel ? '' : ' nolabel') + (full ? ' imgfull' : '') + (v.live ? ' live' : ''),
+    'data-i': i, 'aria-label': v.label || 'Key', style: vars.join(';')
+  },
+    iconNode(v.icon), showLabel ? h('div', { class: 'kl' }, v.label) : null,
+    v.badge ? h('div', { class: 'badge figure' }, v.badge) : null,
+    key.hold && key.hold.type && key.hold.type !== 'none' ? h('div', { class: 'hold', title: 'Has a long-press action' }) : null);
+  bindKey(el, key, i);
+  return el;
+}
+
+/* ---------- press / hold / drag ---------- */
+function bindKey(el, key, i) {
+  let holdT, held = false, start = null, dragging = false, ghost = null, fired = false;
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  el.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    start = { x: e.clientX, y: e.clientY }; held = false; fired = false; dragging = false;
+    el.setPointerCapture(e.pointerId);
+    if (S.editing) return;
+    if (!key) return;
+    el.classList.add('pressed'); haptic();
+    const hasHold = key.hold && key.hold.type && key.hold.type !== 'none';
+    if (hasHold) holdT = setTimeout(() => { held = true; fired = true; haptic(30); press(el, key, key.hold); }, 480);
+    else { fired = true; press(el, key, null); }
+  });
+  el.addEventListener('pointermove', e => {
+    if (!start) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    if (S.editing && key && !dragging && Math.hypot(dx, dy) > 10) {
+      dragging = true; el.classList.add('dragging');
+      ghost = el.cloneNode(true); ghost.classList.add('ghost-key'); ghost.classList.remove('dragging');
+      const r = el.getBoundingClientRect(); ghost.style.width = r.width + 'px'; ghost.style.height = r.height + 'px';
+      document.body.append(ghost);
+    }
+    if (dragging) {
+      const r = el.getBoundingClientRect();
+      ghost.style.left = (e.clientX - r.width / 2) + 'px'; ghost.style.top = (e.clientY - r.height / 2) + 'px';
+      document.querySelectorAll('.key.drop').forEach(k => k.classList.remove('drop'));
+      const over = dropTarget(e); if (over && over !== el) over.classList.add('drop');
+    }
+    if (!S.editing && !fired && Math.hypot(dx, dy) > 24) { clearTimeout(holdT); el.classList.remove('pressed'); start = null; }
+  });
+  const end = e => {
+    clearTimeout(holdT); el.classList.remove('pressed');
+    if (!start) return;
+    if (S.editing) {
+      if (dragging) {
+        const over = dropTarget(e);
+        ghost && ghost.remove(); el.classList.remove('dragging');
+        document.querySelectorAll('.key.drop').forEach(k => k.classList.remove('drop'));
+        if (over && over !== el) moveKey(i, +over.dataset.i);
+      } else if (e.type === 'pointerup') openKeyEditor(i);
+    } else if (key && !fired && e.type === 'pointerup') { press(el, key, null); }
+    start = null; dragging = false;
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); if (S.editing) openKeyEditor(i); else if (key) press(el, key, null); } });
+}
+function dropTarget(e) {
+  const els = document.elementsFromPoint(e.clientX, e.clientY);
+  return els.find(x => x.classList && x.classList.contains('key') && !x.classList.contains('ghost-key') && x.dataset.i != null);
+}
+function moveKey(from, to) {
+  const pg = curPage();
+  while (pg.keys.length <= Math.max(from, to)) pg.keys.push(null);
+  const t = pg.keys[to]; pg.keys[to] = pg.keys[from]; pg.keys[from] = t;
+  save(); render();
+}
+
+/* ---------- run ---------- */
+const DANGER = { shutdown: 'Shut down your PC?', restart: 'Restart your PC?', signout: 'Sign out of Windows?', sleep: 'Put your PC to sleep?' };
+async function press(el, key, override) {
+  let action = override || key.action || { type: 'none' };
+  if (!override && action.type === 'toggle') {
+    const id = keyId(key); const on = !!S.toggles[id];
+    action = (on ? action.b : action.a) || { type: 'none' };
+    S.toggles[id] = !on; LS.set('pd.toggles', S.toggles);
+    // persist _id so toggle state survives reloads
+    save();
+    const ok = await runAction(action, el);
+    if (!ok) { S.toggles[id] = on; LS.set('pd.toggles', S.toggles); }
+    render();
+    return;
+  }
+  await runAction(action, el);
+}
+async function runAction(action, el) {
+  const t = action.type;
+  if (!t || t === 'none') return true;
+  if (t === 'page') { if (page(action.page)) goPage(action.page); else toast('That page was deleted', true); return true; }
+  if (t === 'folder') { if (page(action.page)) openFolder(action.page); else toast('That folder was deleted', true); return true; }
+  if (t === 'back') { goBack(); return true; }
+  if (t === 'system' && DANGER[action.cmd] && settings().confirm) {
+    if (!(await confirmDlg(DANGER[action.cmd], 'Yes, do it'))) return false;
+  }
+  try {
+    const r = await api('/api/run', { method: 'POST', body: action, timeout: 40000 });
+    if (r.state) { S.live = r.state; }
+    if (!r.ok) throw new Error(r.error || 'Failed');
+    flash(el, true);
+    if (action.type === 'audio') setTimeout(render, 10);
+    return true;
+  } catch (e) { flash(el, false); toast(e.message === 'The user aborted a request.' || e.name === 'AbortError' ? 'PC did not answer' : e.message, true); return false; }
+}
+function flash(el, ok) {
+  if (!el || !el.isConnected) return;
+  el.classList.remove('ok', 'err'); void el.offsetWidth; el.classList.add(ok ? 'ok' : 'err');
+  setTimeout(() => el.classList.remove('ok', 'err'), ok ? 350 : 700);
+  if (!ok) haptic([40, 60, 40]);
+}
+
+/* ---------- navigation ---------- */
+function goPage(id) { S.pageId = id; S.stack = []; render(); }
+function openFolder(id) { S.stack.push(S.pageId); S.pageId = id; render(); }
+function goBack() { S.pageId = S.stack.pop() || (topPages()[0] && topPages()[0].id); render(); }
+function swipe(dir) {
+  const pg = curPage(); if (pg.folder) return;
+  const tops = topPages(); const i = tops.findIndex(p => p.id === pg.id);
+  const n = tops[(i + dir + tops.length) % tops.length]; if (n && n.id !== pg.id) goPage(n.id);
+}
+(function wireSwipe() {
+  let sx = null, sy = 0, st = 0;
+  document.addEventListener('pointerdown', e => { if (e.target.closest('#stage') && !S.editing) { sx = e.clientX; sy = e.clientY; st = Date.now(); } }, true);
+  document.addEventListener('pointerup', e => {
+    if (sx == null) return; const dx = e.clientX - sx, dy = e.clientY - sy; sx = null;
+    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - st < 600) swipe(dx < 0 ? 1 : -1);
+  }, true);
+})();
+
+/* ============================================================ live state */
+async function poll() {
+  if (document.hidden) return;
+  try {
+    const r = await api('/api/state', { timeout: 3500 });
+    S.fails = 0;
+    const was = JSON.stringify(S.live); S.live = r.state || {};
+    const wasOnline = S.online, wasPaused = S.paused; S.online = true; S.paused = !!r.paused;
+    if (r.rev && S.rev && r.rev !== S.rev && !S.editing && !sheetOpen()) { S.rev = r.rev; await loadProfile(); render(); return; }
+    if (r.rev && !S.rev) S.rev = r.rev;
+    if (was !== JSON.stringify(S.live) || !wasOnline || wasPaused !== S.paused) render();
+  } catch (e) {
+    S.fails++;
+    if (S.fails >= 2 && S.online) { S.online = false; render(); }
+  }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); setupAwake(); } });
+function renderBanners() {
+  const b = $('#banners'); b.innerHTML = '';
+  const st = $('#status');
+  st.className = 'status' + (!S.online ? ' off' : S.paused ? ' paused' : '');
+  st.textContent = !S.online ? 'Not connected, retrying' : S.paused ? `Paused on ${S.pc}` : S.editing ? 'Editing' : `Connected to ${S.pc || 'your PC'}`;
+  if (!S.online) b.append(h('div', { class: 'notice bad' }, I('wifi-off'), h('span', { class: 'grow' }, 'Can’t reach your PC. Check the Wi-Fi and that PocketDeck is running there.')));
+  else if (S.paused) b.append(h('div', { class: 'notice' }, I('pause'), h('span', { class: 'grow' }, 'Keys are paused from the PC tray icon.')));
+}
+
+/* ============================================================ sheet framework */
+let sheetOnClose = null;
+function openSheet(title, body, { foot, center, onClose } = {}) {
+  $('#shTitle').textContent = title;
+  const b = $('#shBody'); b.innerHTML = ''; b.append(body); b.scrollTop = 0;
+  const f = $('#shFoot'); f.innerHTML = ''; f.classList.toggle('hidden', !foot); if (foot) f.append(...[].concat(foot));
+  $('#sheet').classList.toggle('center', !!center);
+  $('#scrim').style.display = 'block';
+  requestAnimationFrame(() => { $('#scrim').classList.add('show'); $('#sheet').classList.add('show'); });
+  sheetOnClose = onClose || null;
+}
+function closeSheet() {
+  $('#scrim').classList.remove('show'); $('#sheet').classList.remove('show');
+  setTimeout(() => { if (!$('#sheet').classList.contains('show')) $('#scrim').style.display = 'none'; }, 250);
+  const cb = sheetOnClose; sheetOnClose = null; if (cb) cb();
+}
+const sheetOpen = () => $('#sheet').classList.contains('show');
+function confirmDlg(msg, yes = 'OK', danger = true) {
+  return new Promise(res => {
+    let done = false;
+    const fin = v => { if (done) return; done = true; res(v); closeSheet(); };
+    openSheet('Are you sure?', h('div', {}, h('p', {}, msg),
+      h('div', { class: 'dialog-actions' }, h('button', { class: 'pill ghost', onclick: () => fin(false) }, 'Cancel'), h('button', { class: 'pill ' + (danger ? 'danger' : 'primary'), onclick: () => fin(true) }, yes))),
+      { center: true, onClose: () => { if (!done) { done = true; res(false); } } });
+  });
+}
+
+/* ============================================================ key editor */
+const ACTIONS = {
+  hotkey: { name: 'Hotkey', icon: 'keyboard' }, open: { name: 'Open app / file', icon: 'app-window' }, url: { name: 'Website', icon: 'globe' },
+  text: { name: 'Type text', icon: 'type' }, media: { name: 'Media', icon: 'music' }, audio: { name: 'Volume & mic', icon: 'volume-2' },
+  system: { name: 'System', icon: 'monitor' }, command: { name: 'Run command', icon: 'terminal' }, multi: { name: 'Multi-action', icon: 'layers' },
+  toggle: { name: 'Toggle', icon: 'circle-dot' }, page: { name: 'Go to page', icon: 'panels-top-left' }, folder: { name: 'Folder', icon: 'folder' },
+  delay: { name: 'Wait', icon: 'timer' }, none: { name: 'Nothing', icon: 'x' }
+};
+const TOP_TYPES = ['hotkey', 'open', 'url', 'text', 'media', 'audio', 'system', 'command', 'multi', 'toggle', 'page', 'folder'];
+const STEP_TYPES = ['hotkey', 'open', 'url', 'text', 'media', 'audio', 'system', 'command', 'delay'];
+const SUB_TYPES = ['none', 'hotkey', 'open', 'url', 'text', 'media', 'audio', 'system', 'command', 'multi'];
+const HOLD_TYPES = ['none', 'hotkey', 'open', 'url', 'text', 'media', 'audio', 'system', 'command', 'multi', 'page'];
+const MEDIA = [['playpause', 'Play / Pause', 'play'], ['next', 'Next track', 'skip-forward'], ['prev', 'Previous track', 'skip-back'], ['stop', 'Stop', 'square'], ['volup', 'Volume up (key)', 'volume-2'], ['voldown', 'Volume down (key)', 'volume-1'], ['mute', 'Mute (key)', 'volume-x']];
+const AUDIO = [['mute', 'Mute speakers (shows state)', 'volume-x'], ['micmute', 'Mute microphone (shows state)', 'mic-off'], ['up', 'Volume up by %', 'volume-2'], ['down', 'Volume down by %', 'volume-1'], ['set', 'Set volume to %', 'sliders-horizontal']];
+const SYSTEM = [['lock', 'Lock PC', 'lock'], ['screenshot', 'Screenshot (Snipping)', 'scan'], ['showdesktop', 'Show desktop', 'monitor'], ['taskmgr', 'Task Manager', 'cpu'], ['explorer', 'File Explorer', 'folder-open'], ['settings', 'Windows Settings', 'settings'], ['monitoroff', 'Turn off screen', 'monitor-off'], ['sleep', 'Sleep', 'moon'], ['signout', 'Sign out', 'user'], ['restart', 'Restart', 'refresh-cw'], ['shutdown', 'Shut down', 'power']];
+const DEF_ICON = { hotkey: 'keyboard', open: 'app-window', url: 'globe', text: 'type', media: 'play', audio: 'volume-2', system: 'monitor', command: 'terminal', multi: 'layers', toggle: 'circle-dot', page: 'panels-top-left', folder: 'folder' };
+
+function blankAction(type) {
+  switch (type) {
+    case 'hotkey': return { type, keys: '' };
+    case 'open': case 'url': return { type, target: '' };
+    case 'text': return { type, text: '', enter: false };
+    case 'media': return { type, key: 'playpause' };
+    case 'audio': return { type, op: 'mute', value: 5 };
+    case 'system': return { type, cmd: 'lock' };
+    case 'command': return { type, cmd: '', show: false };
+    case 'multi': return { type, steps: [] };
+    case 'toggle': return { type, a: { type: 'none' }, b: { type: 'none' } };
+    case 'page': return { type, page: (topPages().find(p => p.id !== S.pageId) || {}).id || '' };
+    case 'folder': return { type, page: '' };
+    case 'delay': return { type, ms: 500 };
+    default: return { type: 'none' };
+  }
+}
+
+function openKeyEditor(i) {
+  const pg = curPage();
+  while (pg.keys.length <= i) pg.keys.push(null);
+  const isNew = !pg.keys[i];
+  const key = isNew ? { label: '', icon: 'i:keyboard', color: 'k:cream', action: { type: 'hotkey', keys: '' } } : clone(pg.keys[i]);
+  const body = h('div');
+  const prev = h('div', { class: 'preview' });
+  const refreshPrev = () => {
+    prev.innerHTML = ''; const k = Math.min(120, window.innerWidth / 3.2);
+    const wrap = h('div', { style: `--k:${k}px` }); const el = keyEl(key, -1); el.style.pointerEvents = 'none';
+    wrap.append(el); prev.append(wrap);
+  };
+  const autoLabel = () => { /* keep user labels */ };
+
+  // ---- appearance
+  const labelIn = h('input', { class: 'inp', value: key.label || '', placeholder: 'Label (optional)', maxlength: 40, oninput: e => { key.label = e.target.value; refreshPrev(); } });
+  const appearance = h('div', { class: 'sec' }, h('h3', {}, 'Look'),
+    field('Label', h('div', {}, labelIn, switchRow('Show the label', null, !key.hideLabel, v => { key.hideLabel = !v; refreshPrev(); }))),
+    iconPicker(() => key.icon, v => { key.icon = v; refreshPrev(); }, key, refreshPrev),
+    lookControls(key, refreshPrev));
+
+  // ---- action
+  const actBox = h('div');
+  const drawAction = () => {
+    actBox.innerHTML = '';
+    actBox.append(typePicker(TOP_TYPES, key.action.type, t => {
+      key.action = blankAction(t);
+      if (!key.icon || key.icon.startsWith('i:')) key.icon = 'i:' + DEF_ICON[t];
+      if (t === 'folder' && (!key.color || key.color === 'k:cream')) key.color = 'k:amber';
+      drawAction(); drawToggleLook(); refreshPrev();
+    }));
+    actBox.append(h('div', { style: 'height:16px' }));
+    actBox.append(actionForm(key.action, () => { refreshPrev(); }, key));
+  };
+  const action = h('div', { class: 'sec' }, h('h3', {}, 'What it does'), actBox);
+
+  // ---- toggle look
+  const toggleLook = h('div');
+  const drawToggleLook = () => {
+    toggleLook.innerHTML = '';
+    if (key.action.type !== 'toggle') return;
+    key.alt = key.alt || { label: '', icon: '', color: 'k:ember' };
+    toggleLook.append(h('div', { class: 'sec' }, h('h3', {}, 'Look when ON'),
+      h('div', { class: 'field' }, h('input', { class: 'inp', value: key.alt.label || '', placeholder: 'Label when on (blank = same)', oninput: e => { key.alt.label = e.target.value; } })),
+      iconPicker(() => key.alt.icon, v => { key.alt.icon = v; }, null, () => {}, true),
+      field('Light when on', lightPicker(() => key.alt.color, v => { key.alt.color = v; }))));
+  };
+
+  // ---- hold
+  key.hold = key.hold || { type: 'none' };
+  const holdBox = h('div');
+  const drawHold = () => {
+    holdBox.innerHTML = '';
+    holdBox.append(h('div', { class: 'field' }, h('label', {}, 'Long-press action (hold half a second)'),
+      selectEl(HOLD_TYPES.map(t => [t, ACTIONS[t].name]), key.hold.type, t => { key.hold = blankAction(t); drawHold(); refreshPrev(); })));
+    if (key.hold.type !== 'none') holdBox.append(h('div', { class: 'sub-box' }, actionForm(key.hold, refreshPrev, null)));
+  };
+  const hold = h('div', { class: 'sec' }, h('h3', {}, 'Extra'), holdBox);
+
+  body.append(prev, action, toggleLook, appearance, hold);
+  drawAction(); drawToggleLook(); drawHold(); refreshPrev();
+
+  const commit = () => {
+    if (key.hold && key.hold.type === 'none') delete key.hold;
+    if (key.action.type !== 'toggle') delete key.alt;
+    // folder: create a folder page if needed
+    if (key.action.type === 'folder' && !page(key.action.page)) {
+      const f = { id: uid(), name: key.label || 'Folder', folder: true, keys: [] };
+      P().pages.push(f); key.action.page = f.id;
+    }
+    pg.keys[i] = key; save(); closeSheet(); render();
+  };
+  const foot = [
+    !isNew ? h('button', { class: 'round', 'aria-label': 'Delete key', title: 'Delete key', html: svg('trash-2'), onclick: async () => { pg.keys[i] = null; save(); closeSheet(); render(); toast('Key deleted'); } }) : null,
+    !isNew ? h('button', { class: 'round', 'aria-label': 'Copy key', title: 'Copy key', html: svg('copy'), onclick: () => { S.clip = clone(key); delete S.clip._id; toast('Copied. Tap an empty key and press Paste.'); } }) : null,
+    isNew && S.clip ? h('button', { class: 'pill ghost', onclick: () => { pg.keys[i] = clone(S.clip); save(); closeSheet(); render(); } }, I('clipboard-paste'), 'Paste') : null,
+    h('button', { class: 'pill ghost', style: 'margin-left:auto', onclick: async () => { const el = null; await runAction(key.action.type === 'toggle' ? key.action.a : key.action, el); } }, I('play'), 'Test'),
+    h('button', { class: 'pill primary', onclick: commit }, 'Save')
+  ].filter(Boolean);
+  openSheet(isNew ? 'New key' : 'Edit key', body, { foot });
+}
+
+function typePicker(types, cur, onPick) {
+  return h('div', { class: 'types' }, types.map(t => h('button', { class: 'type' + (t === cur ? ' on' : ''), onclick: () => onPick(t) }, I(ACTIONS[t].icon), ACTIONS[t].name)));
+}
+function selectEl(opts, cur, onChange) {
+  return h('select', { class: 'inp', onchange: e => onChange(e.target.value) }, opts.map(([v, l]) => h('option', { value: v, selected: v === cur }, l)));
+}
+function field(label, ctl, hint) { return h('div', { class: 'field' }, label ? h('label', {}, label) : null, ctl, hint ? h('div', { class: 'hint', html: hint }) : null); }
+function switchRow(title, desc, val, onChange) {
+  return h('div', { class: 'toggle-row' }, h('div', {}, h('div', { class: 't' }, title), desc ? h('div', { class: 'd' }, desc) : null),
+    h('label', { class: 'switch' }, h('input', { type: 'checkbox', role: 'switch', 'aria-label': title, checked: !!val, onchange: e => onChange(e.target.checked) }), h('span')));
+}
+
+/* ---------- action forms ---------- */
+function actionForm(a, changed, key) {
+  const box = h('div');
+  const autoIcon = async body => {
+    if (!key || (key.icon && !key.icon.startsWith('i:'))) return;
+    try { const r = await api('/api/icon', { method: 'POST', body, timeout: 15000 }); if (r.ok) { key.icon = r.data; changed(); } } catch {}
+  };
+  const setLabel = (txt, icon) => { if (key && !key.label) { key.label = txt; const li = document.querySelector('#shBody input[placeholder^="Label (optional)"]'); if (li) li.value = txt; } if (key && icon && (!key.icon || key.icon.startsWith('i:'))) key.icon = 'i:' + icon; changed(); };
+  switch (a.type) {
+    case 'hotkey': box.append(hotkeyForm(a, changed)); break;
+    case 'open': {
+      const inp = h('input', { class: 'inp mono', value: a.target || '', placeholder: 'C:\\Path\\to\\app.exe or a file/folder', oninput: e => { a.target = e.target.value; changed(); } });
+      box.append(field('App, file or folder', h('div', { class: 'row' }, h('div', { class: 'grow' }, inp),
+        h('button', { class: 'pill ghost', onclick: () => pickApp(app => { a.target = app.path; inp.value = app.path; setLabel(app.name, 'app-window'); autoIcon({ path: app.path }); }) }, I('search'), 'Pick app')),
+        'Tip: works with Start Menu apps, .exe, documents, folders and shortcuts like <span class="kbd">spotify:</span> or <span class="kbd">ms-settings:</span>.'));
+      box.append(field('Arguments (optional)', h('input', { class: 'inp mono', value: a.args || '', placeholder: '--new-window', oninput: e => { a.args = e.target.value; changed(); } })));
+      break;
+    }
+    case 'url':
+      box.append(field('Website address', h('input', { class: 'inp mono', type: 'url', value: a.target || '', placeholder: 'https://example.com', oninput: e => { a.target = e.target.value; changed(); }, onchange: () => autoIcon({ url: a.target }) }), 'Opens in your default browser on the PC. The site’s own icon is added for you.'));
+      break;
+    case 'text':
+      box.append(field('Text to type', h('textarea', { class: 'inp', value: a.text || '', placeholder: 'Email signature, a reply, a code snippet…', oninput: e => { a.text = e.target.value; changed(); } }), 'Types into whatever window is focused on the PC. Emojis work.'));
+      box.append(switchRow('Press Enter after', 'Good for chat messages', a.enter, v => { a.enter = v; changed(); }));
+      break;
+    case 'media':
+      box.append(h('div', { class: 'chips' }, MEDIA.map(([v, l, ic]) => h('button', { class: 'chip' + (a.key === v ? ' on' : ''), onclick: () => { a.key = v; setLabel(l, ic); box.replaceWith(actionForm(a, changed, key)); } }, I(ic), l))));
+      break;
+    case 'audio': {
+      box.append(h('div', { class: 'chips' }, AUDIO.map(([v, l, ic]) => h('button', { class: 'chip' + (a.op === v ? ' on' : ''), onclick: () => { a.op = v; if (v === 'set' && (a.value == null || a.value <= 10)) a.value = 50; if ((v === 'up' || v === 'down') && (a.value == null || a.value > 25)) a.value = 5; setLabel(l.replace(/ \(.*\)| by %| to %/g, ''), ic); box.replaceWith(actionForm(a, changed, key)); } }, I(ic), l))));
+      if (a.op === 'up' || a.op === 'down' || a.op === 'set') {
+        const out = h('span', { class: 'kbd' }, (a.value || 0) + '%');
+        box.append(h('div', { style: 'height:16px' }), field(a.op === 'set' ? 'Volume' : 'Step size', h('div', { class: 'row' }, h('input', { type: 'range', class: 'grow', min: a.op === 'set' ? 0 : 1, max: a.op === 'set' ? 100 : 25, value: a.value || 5, oninput: e => { a.value = +e.target.value; out.textContent = a.value + '%'; changed(); } }), out)));
+      }
+      box.append(h('div', { class: 'hint' }, 'Mute keys turn red when muted, so you always know if your mic is live.'));
+      break;
+    }
+    case 'system':
+      box.append(h('div', { class: 'chips' }, SYSTEM.map(([v, l, ic]) => h('button', { class: 'chip' + (a.cmd === v ? ' on' : ''), onclick: () => { a.cmd = v; setLabel(l, ic); box.replaceWith(actionForm(a, changed, key)); } }, I(ic), l))));
+      if (DANGER[a.cmd]) box.append(h('div', { class: 'hint' }, 'You will be asked to confirm (turn off in Settings).'));
+      break;
+    case 'command':
+      box.append(field('Command (cmd.exe)', h('textarea', { class: 'inp mono', value: a.cmd || '', placeholder: 'start "" "C:\\Games\\game.exe"\nor: powershell -c "..."', oninput: e => { a.cmd = e.target.value; changed(); } }), 'Runs on your PC with your user rights. Only add commands you trust.'));
+      box.append(switchRow('Show the window', 'Keep a console open to see output', a.show, v => { a.show = v; changed(); }));
+      break;
+    case 'delay': {
+      const out = h('span', { class: 'kbd' }, (a.ms || 0) + ' ms');
+      box.append(h('div', { class: 'row' }, h('input', { type: 'range', class: 'grow', min: 50, max: 5000, step: 50, value: a.ms || 500, oninput: e => { a.ms = +e.target.value; out.textContent = a.ms + ' ms'; changed(); } }), out));
+      break;
+    }
+    case 'multi': box.append(multiForm(a, changed)); break;
+    case 'toggle':
+      box.append(h('div', { class: 'hint', style: 'margin:0 0 12px' }, 'Each press switches between two actions, and the key changes look.'));
+      ['a', 'b'].forEach(s => {
+        const sub = h('div', { class: 'sub-box' });
+        const draw = () => { sub.innerHTML = ''; sub.append(field(s === 'a' ? 'Press 1 (turns ON)' : 'Press 2 (turns OFF)', selectEl(SUB_TYPES.map(t => [t, ACTIONS[t].name]), a[s].type, t => { a[s] = blankAction(t); draw(); changed(); }))); if (a[s].type !== 'none') sub.append(actionForm(a[s], changed, null)); };
+        draw(); box.append(sub, h('div', { style: 'height:10px' }));
+      });
+      break;
+    case 'page': {
+      const opts = topPages().map(p => [p.id, p.name]);
+      box.append(field('Go to', selectEl(opts, a.page, v => { a.page = v; const p = page(v); setLabel(p ? p.name : '', 'panels-top-left'); }), 'Swipe left/right also switches pages.'));
+      break;
+    }
+    case 'folder': {
+      const f = page(a.page);
+      box.append(h('div', { class: 'hint', style: 'margin:0' }, f ? `Opens the folder "${f.name}". Save, then tap the key and edit the keys inside.` : 'A new folder will be created when you save. Tap the key to open it and add keys inside.'));
+      if (f) box.append(h('div', { style: 'height:10px' }), field('Folder name', h('input', { class: 'inp', value: f.name, oninput: e => { f.name = e.target.value; } })));
+      break;
+    }
+  }
+  return box;
+}
+
+function hotkeyForm(a, changed) {
+  const box = h('div');
+  const MODS = ['ctrl', 'shift', 'alt', 'win'];
+  const parse = () => {
+    const chord = (a.keys || '').split(',')[0].trim().toLowerCase();
+    const parts = chord ? chord.split('+').filter(Boolean) : [];
+    if (chord.endsWith('++')) parts.push('plus');
+    return { mods: MODS.filter(m => parts.includes(m)), key: parts.filter(p => !MODS.includes(p)).join('+') };
+  };
+  const raw = h('input', { class: 'inp mono', value: a.keys || '', placeholder: 'ctrl+shift+m', oninput: e => { a.keys = e.target.value.toLowerCase(); changed(); drawChips(); } });
+  const chips = h('div', { class: 'chips' });
+  const keyIn = h('input', { class: 'inp mono', placeholder: 'Key: a, f5, enter, up…', list: 'keylist', style: 'max-width:200px', oninput: e => setKey(e.target.value.trim().toLowerCase()) });
+  const build = (mods, key) => { a.keys = [...mods, ...(key ? [key] : [])].join('+'); raw.value = a.keys; changed(); };
+  const setKey = k => { const p = parse(); build(p.mods, k); drawChips(false); };
+  const drawChips = (syncKey = true) => {
+    const p = parse(); chips.innerHTML = '';
+    MODS.forEach(m => chips.append(h('button', { class: 'chip' + (p.mods.includes(m) ? ' on' : ''), onclick: () => { const q = parse(); const mods = q.mods.includes(m) ? q.mods.filter(x => x !== m) : MODS.filter(x => x === m || q.mods.includes(x)); build(mods, q.key); drawChips(); } }, m[0].toUpperCase() + m.slice(1))));
+    if (syncKey) keyIn.value = p.key;
+  };
+  let recording = false;
+  const rec = h('button', { class: 'pill ghost', onclick: () => {
+    recording = !recording; rec.classList.toggle('primary', recording); rec.lastChild.textContent = recording ? 'Press keys…' : 'Record';
+    if (recording) { window.addEventListener('keydown', onRec, true); } else window.removeEventListener('keydown', onRec, true);
+  } }, I('circle-dot'), 'Record');
+  function onRec(e) {
+    e.preventDefault(); e.stopPropagation();
+    const name = codeToKey(e);
+    if (!name) return;
+    const mods = []; if (e.ctrlKey) mods.push('ctrl'); if (e.shiftKey) mods.push('shift'); if (e.altKey) mods.push('alt'); if (e.metaKey) mods.push('win');
+    build(mods, name); drawChips();
+    recording = false; rec.classList.remove('primary'); rec.lastChild.textContent = 'Record'; window.removeEventListener('keydown', onRec, true);
+  }
+  const quick = [['Copy', 'ctrl+c'], ['Paste', 'ctrl+v'], ['Undo', 'ctrl+z'], ['Alt+Tab', 'alt+tab'], ['Close window', 'alt+f4'], ['Snip', 'win+shift+s'], ['Emoji', 'win+.'], ['Lock', 'win+l']];
+  box.append(field('Modifiers', chips));
+  box.append(field('Key', h('div', { class: 'row wrap' }, keyIn, rec), isTouch() ? 'Record works with a keyboard (best on the PC editor).' : 'Press Record, then the combo on your keyboard. (Win key: tick the chip.)'));
+  box.append(field('Combo', raw, 'Several in a row: separate with a comma, e.g. <span class="kbd">ctrl+k, ctrl+c</span>'));
+  box.append(field('Quick picks', h('div', { class: 'chips' }, quick.map(([l, k]) => h('button', { class: 'chip', onclick: () => { a.keys = k; raw.value = k; changed(); drawChips(); } }, l)))));
+  drawChips();
+  return box;
+}
+const isTouch = () => matchMedia('(pointer:coarse)').matches;
+function codeToKey(e) {
+  const c = e.code || '';
+  if (['ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight', 'OSLeft', 'OSRight'].includes(c)) return null;
+  if (/^Key[A-Z]$/.test(c)) return c.slice(3).toLowerCase();
+  if (/^Digit\d$/.test(c)) return c.slice(5);
+  if (/^F\d{1,2}$/.test(c)) return c.toLowerCase();
+  if (/^Numpad\d$/.test(c)) return 'num' + c.slice(6);
+  const map = { Enter: 'enter', NumpadEnter: 'enter', Tab: 'tab', Escape: 'esc', Space: 'space', Backspace: 'backspace', Delete: 'delete', Insert: 'insert', Home: 'home', End: 'end', PageUp: 'pageup', PageDown: 'pagedown', ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', CapsLock: 'capslock', PrintScreen: 'printscreen', Pause: 'pause', Semicolon: ';', Equal: '=', Comma: ',', Minus: '-', Period: '.', Slash: '/', Backquote: '`', BracketLeft: '[', Backslash: '\\', BracketRight: ']', Quote: "'", NumpadMultiply: 'nummult', NumpadAdd: 'numplus', NumpadSubtract: 'numminus', NumpadDecimal: 'numdot', NumpadDivide: 'numdiv', ContextMenu: 'menu', MediaPlayPause: 'playpause', MediaTrackNext: 'nexttrack', MediaTrackPrevious: 'prevtrack', AudioVolumeUp: 'volumeup', AudioVolumeDown: 'volumedown', AudioVolumeMute: 'volumemute' };
+  return map[c] || null;
+}
+
+function multiForm(a, changed) {
+  const box = h('div');
+  a.steps = a.steps || [];
+  const draw = () => {
+    box.innerHTML = '';
+    box.append(h('div', { class: 'hint', style: 'margin:0 0 12px' }, 'Steps run top to bottom on one press. Add a Wait between steps if an app needs time to open.'));
+    const list = h('div', { class: 'steps' });
+    a.steps.forEach((s, idx) => {
+      const head = h('div', { class: 'step-head' }, h('span', { class: 'n' }, idx + 1),
+        selectEl(STEP_TYPES.map(t => [t, ACTIONS[t].name]), s.type, t => { a.steps[idx] = blankAction(t); draw(); changed(); }),
+        h('button', { class: 'round', 'aria-label': 'Move up', html: svg('arrow-up'), disabled: idx === 0, onclick: () => { [a.steps[idx - 1], a.steps[idx]] = [a.steps[idx], a.steps[idx - 1]]; draw(); changed(); } }),
+        h('button', { class: 'round', 'aria-label': 'Move down', html: svg('arrow-down'), disabled: idx === a.steps.length - 1, onclick: () => { [a.steps[idx + 1], a.steps[idx]] = [a.steps[idx], a.steps[idx + 1]]; draw(); changed(); } }),
+        h('button', { class: 'round', 'aria-label': 'Remove step', html: svg('trash-2'), onclick: () => { a.steps.splice(idx, 1); draw(); changed(); } }));
+      list.append(h('div', { class: 'step' }, head, actionForm(s, changed, null)));
+    });
+    box.append(list);
+    box.append(h('div', { class: 'row wrap', style: 'margin-top:12px' },
+      h('button', { class: 'pill small ghost', onclick: () => { a.steps.push(blankAction('hotkey')); draw(); changed(); } }, I('plus'), 'Add step'),
+      h('button', { class: 'pill small ghost', onclick: () => { a.steps.push(blankAction('delay')); draw(); changed(); } }, I('timer'), 'Add wait')));
+  };
+  draw();
+  return box;
+}
+
+/* ---------- icon + color pickers ---------- */
+const ICON_NAMES = Object.keys(ICONS);
+function iconSearch(q) {
+  q = q.toLowerCase().trim();
+  if (!q) return ICON_NAMES;
+  const words = q.split(/\s+/);
+  const hit = n => words.every(w => n.includes(w) || (ICON_TAGS[n] || '').includes(w));
+  const exact = ICON_NAMES.filter(n => n.startsWith(q)), rest = ICON_NAMES.filter(n => !n.startsWith(q) && hit(n));
+  return exact.concat(rest);
+}
+function iconPicker(get, set, key, refresh, allowBlank) {
+  const box = h('div', { class: 'field' });
+  const cur = () => get() || '';
+  let mode = cur().startsWith('e:') ? 'emoji' : cur().startsWith('data:') ? 'image' : 'icon';
+  let limit = 120;
+  const draw = () => {
+    box.innerHTML = '';
+    box.append(h('span', { class: 'lbl' }, 'Icon'));
+    box.append(h('div', { class: 'seg', role: 'tablist' },
+      [['icon', 'Icons'], ['app', 'From PC'], ['emoji', 'Emoji'], ['image', 'Image'], ['none', allowBlank ? 'Same' : 'None']].map(([m, l]) =>
+        h('button', { class: mode === m ? 'on' : '', role: 'tab', 'aria-selected': mode === m ? 'true' : 'false', onclick: () => { if (m === 'none') { set(''); mode = 'icon'; } else mode = m; limit = 120; draw(); } }, l))));
+    const pane = h('div', { style: 'margin-top:12px' });
+    box.append(pane);
+    if (mode === 'icon') {
+      const grid = h('div', { class: 'icongrid' });
+      const search = h('input', { class: 'inp', type: 'search', placeholder: `Search ${ICON_NAMES.length.toLocaleString()} icons: mic, play, folder`, oninput: () => { limit = 120; fill(); } });
+      const fill = () => {
+        grid.innerHTML = '';
+        const list = iconSearch(search.value);
+        list.slice(0, limit).forEach(n => grid.append(h('button', { class: cur() === 'i:' + n ? 'on' : '', title: n, 'aria-label': n, html: svg(n), onclick: () => { set('i:' + n); fill(); } })));
+        if (list.length > limit) grid.append(h('button', { class: 'more', onclick: () => { limit += 240; fill(); } }, `Show more (${list.length - limit} left)`));
+        if (!list.length) grid.append(h('p', { class: 'hint', style: 'grid-column:1/-1' }, 'No icon by that name. Try another word.'));
+      };
+      pane.append(search, grid); fill();
+    } else if (mode === 'app') {
+      const a = key && key.action || {};
+      const path = h('input', { class: 'inp mono', placeholder: 'C:\\Path\\to\\app.exe, a file or a folder', value: a.type === 'open' ? (a.target || '') : '' });
+      const web = h('input', { class: 'inp mono', type: 'url', placeholder: 'youtube.com', value: a.type === 'url' ? (a.target || '') : '' });
+      const go = async (body, btn) => {
+        btn.disabled = true; const t = btn.textContent; btn.textContent = 'Getting icon';
+        try { const r = await api('/api/icon', { method: 'POST', body, timeout: 15000 }); if (!r.ok) throw new Error(r.error); set(r.data); if (key) key.imgFull = false; toast('Icon added'); draw(); }
+        catch (e) { toast(e.message, true); }
+        finally { btn.disabled = false; btn.textContent = t; }
+      };
+      const b1 = h('button', { class: 'pill ghost', onclick: e => go({ path: path.value }, e.currentTarget) }, 'Use app icon');
+      const b2 = h('button', { class: 'pill ghost', onclick: e => go({ url: web.value }, e.currentTarget) }, 'Use site icon');
+      pane.append(
+        field('An app, file or folder on your PC', h('div', {}, h('div', { class: 'row' }, h('div', { class: 'grow' }, path), h('button', { class: 'round', 'aria-label': 'Pick an app', html: svg('search'), onclick: () => pickApp(app => { path.value = app.path; go({ path: app.path }, b1); }) })), h('div', { class: 'row', style: 'margin-top:8px' }, b1))),
+        field('A website', h('div', {}, web, h('div', { class: 'row', style: 'margin-top:8px' }, b2))),
+        h('p', { class: 'hint' }, 'Takes the real icon from your PC, like Spotify’s or Chrome’s.'));
+    } else if (mode === 'emoji') {
+      const val = cur().startsWith('e:') ? cur().slice(2) : '';
+      const picks = ['🎮', '🎧', '🎤', '📷', '🎬', '🔴', '💬', '📧', '📅', '💡', '🔥', '🚀', '⭐', '✅', '🔒', '📁', '🌐', '☕', '💰', '🧠', '🎵', '👋', '😂', '👍'];
+      pane.append(h('input', { class: 'inp', value: val, placeholder: 'Type or paste any emoji', maxlength: 8, oninput: e => set(e.target.value ? 'e:' + e.target.value : '') }),
+        h('div', { class: 'chips', style: 'margin-top:8px' }, picks.map(p => h('button', { class: 'chip', style: 'font-size:20px', 'aria-label': p, onclick: () => { set('e:' + p); draw(); } }, p))));
+    } else if (mode === 'image') {
+      const file = h('input', { type: 'file', accept: 'image/*', class: 'hidden', onchange: async e => { const f = e.target.files[0]; if (!f) return; try { set(await shrinkImage(f)); draw(); } catch (err) { toast(err.message, true); } } });
+      pane.append(h('div', { class: 'row' }, h('button', { class: 'pill ghost', onclick: () => file.click() }, I('upload'), 'Choose an image'), file));
+      if (key) pane.append(switchRow('Fill the whole key', 'The picture covers the key', key.imgFull, v => { key.imgFull = v; refresh(); }));
+      pane.append(h('p', { class: 'hint' }, 'Logos and photos work well. They are shrunk to keep the deck quick.'));
+    }
+    refresh();
+  };
+  draw();
+  return box;
+}
+function lookControls(key, refresh) {
+  const box = h('div');
+  const scale = h('span', { class: 'kbd' }, Math.round((key.iconScale || 1) * 100) + '%');
+  box.append(
+    field('Key light', lightPicker(() => key.color, v => { key.color = v; refresh(); })),
+    field('Icon color', lightPicker(() => key.iconColor || '', v => { key.iconColor = v; refresh(); }, true)),
+    field('Icon size', h('div', { class: 'row' }, h('input', { type: 'range', class: 'grow', min: 60, max: 140, step: 5, value: Math.round((key.iconScale || 1) * 100), 'aria-label': 'Icon size',
+      oninput: e => { key.iconScale = +e.target.value / 100; scale.textContent = e.target.value + '%'; refresh(); } }), scale)),
+    field('Key style', segmented([['', 'Deck default'], ['backlit', 'Backlit'], ['solid', 'Solid']], key.style || '', v => { key.style = v || undefined; refresh(); })));
+  return box;
+}
+function segmented(opts, cur, onPick) {
+  const box = h('div', { class: 'seg' });
+  const draw = c => { box.innerHTML = ''; opts.forEach(([v, l]) => box.append(h('button', { class: v === c ? 'on' : '', 'aria-pressed': v === c ? 'true' : 'false', onclick: () => { onPick(v); draw(v); } }, l))); };
+  draw(cur); return box;
+}
+function lightPicker(get, set, withAuto) {
+  const box = h('div', { class: 'lights' });
+  const draw = () => {
+    box.innerHTML = '';
+    if (withAuto) box.append(h('button', { class: 'light auto' + (!get() ? ' on' : ''), title: 'Match the key light', 'aria-label': 'Match the key light', onclick: () => { set(''); draw(); } }));
+    LIGHTS.forEach(([n, l]) => box.append(h('button', { class: 'light' + (get() === 'k:' + n ? ' on' : ''), style: `--sw:var(--key-${n})`, title: l, 'aria-label': l, onclick: () => { set('k:' + n); draw(); } })));
+    const custom = get() && get().startsWith('#');
+    box.append(h('label', { class: 'light custom' + (custom ? ' on' : ''), title: 'Any color' },
+      h('input', { type: 'color', 'aria-label': 'Any color', value: custom ? get() : '#ff8a3d', oninput: e => set(e.target.value), onchange: draw })));
+  };
+  draw();
+  return box;
+}
+function shrinkImage(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const max = 192, s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      res(c.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+/* ---------- app picker ---------- */
+async function pickApp(onPick) {
+  const host = $('#shBody');
+  const panel = h('div', { class: 'picker' });
+  const list = h('div', { class: 'applist' }, h('div', { class: 'hint' }, 'Loading apps from your PC…'));
+  const search = h('input', { class: 'inp', placeholder: 'Search apps', oninput: () => fill() });
+  const close = () => panel.remove();
+  panel.append(h('div', { class: 'row' }, h('div', { class: 'grow' }, search), h('button', { class: 'pill ghost', onclick: close }, 'Cancel')), list);
+  host.prepend(panel); host.scrollTop = 0; setTimeout(() => search.focus(), 50);
+  let apps = [];
+  const fill = () => {
+    const q = search.value.toLowerCase(); list.innerHTML = '';
+    apps.filter(a => a.name.toLowerCase().includes(q)).slice(0, 150).forEach(a => list.append(h('button', { onclick: () => { onPick(a); close(); } }, I('app-window'), a.name)));
+    if (!list.children.length) list.append(h('div', { class: 'hint' }, 'No apps found. You can paste a path instead.'));
+  };
+  try { apps = (await api('/api/apps', { timeout: 15000 })).apps || []; fill(); }
+  catch (e) { list.innerHTML = ''; list.append(h('div', { class: 'hint' }, 'Could not load apps: ' + e.message)); }
+}
+
+/* ============================================================ settings */
+function openSettings() {
+  const st = P().settings;
+  const body = h('div');
+  const up = () => { save(); render(); };
+  // layout
+  body.append(h('div', { class: 'sec' }, h('h3', {}, 'Look'),
+    field('Colorway', segmented([['ember', 'Ember'], ['reduction', 'Deep red'], ['carbon', 'Pure black'], ['bisque', 'Light']], st.theme || 'ember', v => { st.theme = v; up(); })),
+    field('Key shape', segmented([['rounded', 'Rounded'], ['square', 'Square'], ['round', 'Circle']], st.shape || 'rounded', v => { st.shape = v; up(); })),
+    field('Key style', segmented([['backlit', 'Backlit'], ['solid', 'Solid']], st.keyStyle || 'backlit', v => { st.keyStyle = v; up(); }), 'Each key can override this in its own Look settings.')));
+  body.append(h('div', { class: 'sec' }, h('h3', {}, 'Layout'),
+    field('Keys per page', h('div', { class: 'chips' }, Object.keys(LAYOUTS).map(n => {
+      const [a, b] = LAYOUTS[n];
+      return h('button', { class: 'chip' + (+st.layout === +n ? ' on' : ''), onclick: () => { st.layout = +n; up(); openSettings(); } }, `${n} keys, ${a} by ${b}`);
+    })), 'The grid turns sideways automatically when you rotate the phone.'),
+    field('Space between keys', h('input', { type: 'range', min: 4, max: 24, value: st.gap || 10, oninput: e => { st.gap = +e.target.value; up(); } }))));
+  // pages
+  const pagesBox = h('div', { class: 'list' });
+  const drawPages = () => {
+    pagesBox.innerHTML = '';
+    const tops = topPages();
+    tops.forEach((p, idx) => pagesBox.append(h('div', { class: 'li' },
+      h('input', { class: 'name grow', value: p.name, 'aria-label': 'Page name', oninput: e => { p.name = e.target.value; up(); } }),
+      h('button', { class: 'round', 'aria-label': 'Move up', html: svg('arrow-up'), onclick: () => { movePage(p, -1); drawPages(); } }),
+      h('button', { class: 'round', 'aria-label': 'Move down', html: svg('arrow-down'), onclick: () => { movePage(p, 1); drawPages(); } }),
+      h('button', { class: 'round', 'aria-label': 'Delete page', html: svg('trash-2'), onclick: async () => {
+        if (tops.length < 2) { toast('Keep at least one page', true); return; }
+        if (!(await confirmDlg(`Delete page "${p.name}" and its keys?`, 'Delete'))) { openSettings(); return; }
+        P().pages = P().pages.filter(x => x !== p); if (S.pageId === p.id) S.pageId = topPages()[0].id; up(); openSettings();
+      } }))));
+    const folders = P().pages.filter(p => p.folder);
+    if (folders.length) {
+      pagesBox.append(h('div', { class: 'lbl', style: 'margin-top:16px' }, 'Folders'));
+      folders.forEach(f => pagesBox.append(h('div', { class: 'li' }, I('folder'), h('span', { class: 'grow' }, f.name),
+        h('button', { class: 'round', 'aria-label': 'Delete folder', html: svg('trash-2'), onclick: async () => {
+          if (!(await confirmDlg(`Delete folder "${f.name}" and its keys?`, 'Delete'))) { openSettings(); return; }
+          P().pages = P().pages.filter(x => x !== f); if (S.pageId === f.id) goBack(); up(); openSettings();
+        } }))));
+    }
+  };
+  drawPages();
+  body.append(h('div', { class: 'sec' }, h('h3', {}, 'Pages'), pagesBox,
+    h('div', { class: 'row wrap', style: 'margin-top:12px' },
+      h('button', { class: 'pill small ghost', onclick: () => { const p = { id: uid(), name: 'Page ' + (topPages().length + 1), keys: [] }; P().pages.push(p); S.pageId = p.id; up(); closeSheet(); S.editing = true; render(); } }, I('plus'), 'Blank page'))));
+  // templates
+  body.append(h('div', { class: 'sec' }, h('h3', {}, 'Add a ready-made page'),
+    h('div', { class: 'types' }, Object.entries(TEMPLATES).map(([k, t]) => h('button', { class: 'type', onclick: () => { const p = t.make(); P().pages.push(p); S.pageId = p.id; up(); closeSheet(); toast(`Added "${p.name}" page`); } }, I(t.icon), t.name))),
+    h('p', { class: 'hint' }, 'The streaming page uses Ctrl+Shift+F keys. Set the same hotkeys in OBS, under Settings, Hotkeys.')));
+  // behaviour
+  body.append(h('div', { class: 'sec' }, h('h3', {}, 'Behavior'),
+    switchRow('Show labels', null, st.labels, v => { st.labels = v; up(); }),
+    switchRow('Haptic tap', isIOS ? 'iPhone: needs iOS 18+' : 'Vibrate on press', st.haptics, v => { st.haptics = v; up(); }),
+    switchRow('Keep screen on', 'While the deck is open', st.awake, v => { st.awake = v; up(); setupAwake(); }),
+    switchRow('Confirm power actions', 'Ask before shut down, restart, sleep, sign out', st.confirm, v => { st.confirm = v; up(); }),
+));
+  // device
+  const dev = h('div', { class: 'sec' }, h('h3', {}, 'This device'),
+    h('div', { class: 'hint', style: 'margin:0 0 12px' }, `Connected to ${S.pc || 'your PC'}.`),
+    h('div', { class: 'row wrap' },
+      document.fullscreenEnabled ? h('button', { class: 'pill small ghost', onclick: () => { document.documentElement.requestFullscreen().catch(() => {}); closeSheet(); } }, I('maximize'), 'Full screen') : null,
+      !S.local ? h('button', { class: 'pill small ghost', onclick: openPhoneTips }, I('smartphone'), 'Phone setup tips') : null,
+      S.local ? h('button', { class: 'pill small ghost', onclick: openConnect }, I('smartphone'), 'Connect a phone') : null,
+      !S.local ? h('button', { class: 'pill small danger', onclick: async () => { if (await confirmDlg('Disconnect this phone? You will need the PIN again.', 'Disconnect')) { try { await api('/api/unpair', { method: 'POST', body: {} }); } catch {} LS.del('pd.token'); S.token = ''; showPair(); } } }, 'Disconnect') : null));
+  body.append(dev);
+  // backup
+  body.append(h('div', { class: 'sec' }, h('h3', {}, 'Backup'),
+    h('div', { class: 'row wrap' },
+      h('button', { class: 'pill small ghost', onclick: exportProfile }, I('download'), 'Export'),
+      h('button', { class: 'pill small ghost', onclick: importProfile }, I('upload'), 'Import'),
+      h('button', { class: 'pill small danger', onclick: async () => { if (await confirmDlg('Reset to the starter layout? Your keys will be replaced.', 'Reset')) { S.profile = defaultProfile(); S.pageId = null; S.stack = []; await saveNow(); await loadProfile(); render(); closeSheet(); } } }, 'Reset'))));
+  body.append(h('p', { class: 'hint', style: 'text-align:center' }, 'PocketDeck 1.1'));
+  openSheet('Settings', body);
+}
+function movePage(p, dir) {
+  const tops = topPages(); const i = tops.indexOf(p); const j = i + dir; if (j < 0 || j >= tops.length) return;
+  const all = P().pages; const ai = all.indexOf(tops[i]), aj = all.indexOf(tops[j]);
+  [all[ai], all[aj]] = [all[aj], all[ai]]; save(); render();
+}
+function exportProfile() {
+  const data = JSON.stringify(P(), null, 2);
+  const a = h('a', { href: URL.createObjectURL(new Blob([data], { type: 'application/json' })), download: 'pocketdeck-backup.json' });
+  document.body.append(a); a.click(); a.remove();
+  if (navigator.clipboard && isSecureContext) navigator.clipboard.writeText(data).catch(() => {});
+  toast('Backup downloaded');
+}
+function importProfile() {
+  const ta = h('textarea', { class: 'inp mono', placeholder: 'Paste a backup here, or choose a file', style: 'min-height:160px' });
+  const file = h('input', { type: 'file', accept: '.json,application/json', class: 'hidden', onchange: async e => { const f = e.target.files[0]; if (f) ta.value = await f.text(); } });
+  openSheet('Import backup', h('div', {}, ta, h('div', { class: 'row', style: 'margin-top:10px' }, h('button', { class: 'pill ghost', onclick: () => file.click() }, I('file'), 'Choose file'), file)), {
+    center: true, foot: [h('button', { class: 'pill ghost', onclick: closeSheet }, 'Cancel'), h('button', { class: 'pill primary', style: 'margin-left:auto', onclick: () => {
+      try { const p = JSON.parse(ta.value); if (!p || !Array.isArray(p.pages)) throw 0; S.profile = p; S.pageId = null; S.stack = []; closeSheet(); saveNow().then(loadProfile).then(render); toast('Backup imported'); }
+      catch { toast('That is not a PocketDeck backup', true); }
+    } }, 'Import')]
+  });
+}
+
+/* ============================================================ connect (PC) */
+async function openConnect() {
+  const body = h('div', {}, h('p', { class: 'hint' }, 'Loading'));
+  openSheet('Connect your phone', body, { center: true });
+  let info;
+  try { info = await api('/api/connect'); } catch (e) { body.innerHTML = ''; body.append(h('p', {}, 'Could not load: ' + e.message)); return; }
+  body.innerHTML = '';
+  const url = info.urls[0];
+  if (!url) { body.append(h('div', { class: 'notice bad' }, I('wifi-off'), h('span', { class: 'grow' }, 'This PC is not on a network yet. Join your Wi-Fi first.'))); return; }
+  const qr = qrcode(0, 'M'); qr.addData(url + '?pin=' + info.pin); qr.make();
+  body.className = 'connect';
+  body.append(
+    h('div', { class: 'top' },
+      h('div', { class: 'qrbox', html: qr.createSvgTag({ cellSize: 6, margin: 0, scalable: true }), role: 'img', 'aria-label': 'QR code that opens PocketDeck on your phone' }),
+      h('div', {},
+        h('ol', { class: 'steps-list' }, h('li', {}, 'Join the same Wi-Fi as this PC.'), h('li', {}, 'Point the phone camera at the code.'), h('li', {}, 'Or open the address below and type the PIN.')))),
+    h('div', {}, h('span', { class: 'lbl' }, 'PIN'), h('div', { class: 'bigpin figure' }, info.pin)),
+    h('div', {}, h('span', { class: 'lbl' }, info.urls.length > 1 ? 'Addresses' : 'Address'), ...info.urls.map(u => h('div', { class: 'url' }, u))),
+    info.devices.length ? h('div', {}, h('span', { class: 'lbl' }, 'Paired phones'),
+      h('div', { class: 'list' }, info.devices.map(d => h('div', { class: 'li' }, I('smartphone'), h('span', { class: 'grow' }, d.name), h('span', { class: 'hint', style: 'margin:0' }, ago(d.seen))))),
+      h('button', { class: 'pill danger small', style: 'margin-top:8px', onclick: async () => { if (await confirmDlg('Disconnect every phone and make a new PIN?', 'Unpair all')) { await api('/api/unpair-all', { method: 'POST', body: {} }); openConnect(); } } }, 'Unpair all and make a new PIN')) : null,
+    h('details', {}, h('summary', {}, 'Phone can’t connect?'),
+      h('ul', { class: 'steps-list' },
+        h('li', {}, 'Both must be on the same Wi-Fi, not a guest network.'),
+        h('li', {}, 'In Windows, set this Wi-Fi to Private: Settings, Network, Wi-Fi, your network.'),
+        h('li', {}, 'If Windows asked about the firewall, choose Allow, or run Install.bat again.'),
+        h('li', {}, 'Try the other address if two are listed.'))));
+  const watch = setInterval(async () => {
+    if (!sheetOpen()) { clearInterval(watch); return; }
+    try { const n = await api('/api/connect'); if (n.devices.length > info.devices.length) { clearInterval(watch); toast('Phone connected'); openConnect(); } } catch {}
+  }, 2000);
+}
+function ago(iso) {
+  if (!iso) return ''; const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 90) return 'now'; if (s < 3600) return Math.round(s / 60) + 'm ago'; if (s < 86400) return Math.round(s / 3600) + 'h ago'; return Math.round(s / 86400) + 'd ago';
+}
+function openPhoneTips() {
+  const steps = isIOS
+    ? ['Tap the Share button in Safari.', 'Tap “Add to Home Screen”, then Add.', 'Open PocketDeck from the home screen icon (full screen).', 'Keep the screen on: Settings > Display & Brightness > Auto-Lock > Never (for a dedicated deck phone).', 'Lock it to this app: Settings > Accessibility > Guided Access.']
+    : ['Tap the ⋮ menu in Chrome.', 'Tap “Add to Home screen”.', 'Open PocketDeck from the home screen icon.', 'Keep the screen on: Settings > Display > Screen timeout (max), or Developer options > Stay awake while charging.', 'Optional: Settings > Security > App pinning to lock it to this app.'];
+  openSheet('Make it feel like an app', h('div', {}, h('ol', { class: 'steps-list' }, steps.map(s => h('li', {}, s))),
+    h('p', { class: 'hint', style: 'margin-top:16px' }, 'A phone stand and a charger turn it into a desk deck that stays put.')), { center: true, foot: [h('button', { class: 'pill primary block', onclick: closeSheet }, 'Got it')] });
+}
+
+/* ============================================================ haptics + keep awake */
+function haptic(p = 10) {
+  if (!S.profile || !settings().haptics) return;
+  if (navigator.vibrate) { try { navigator.vibrate(p); return; } catch {} }
+  if (isIOS) { try { $('#hapticLabel').click(); } catch {} }
+}
+let wakeLock = null, nosleepOn = false;
+async function setupAwake() {
+  if (!S.profile) return;
+  const want = settings().awake && !S.local;
+  if (!want) { try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; $('#nosleep').pause(); nosleepOn = false; return; }
+  if ('wakeLock' in navigator && isSecureContext) {
+    try { wakeLock = await navigator.wakeLock.request('screen'); return; } catch {}
+  }
+  // Fallback for plain http on the LAN: a tiny silent looping video keeps phones awake.
+  const v = $('#nosleep');
+  if (!v.src) v.src = NOSLEEP_MP4;
+  const start = () => { v.play().then(() => { nosleepOn = true; }).catch(() => {}); };
+  start();
+  if (!nosleepOn) document.addEventListener('pointerdown', start, { once: true });
+}
+
+/* ============================================================ wiring */
+function wireStatic() {
+  $('#editBtn').innerHTML = svg('pencil');
+  $('#settingsBtn').innerHTML = svg('settings');
+  $('#backBtn').innerHTML = svg('chevron-left');
+  $('#shClose').innerHTML = svg('x');
+  $('#connectBtn').innerHTML = svg('smartphone') + '<span>Connect a phone</span>';
+  $('#editBtn').onclick = () => { S.editing = true; render(); };
+  $('#doneBtn').onclick = () => { S.editing = false; render(); };
+  $('#settingsBtn').onclick = openSettings;
+  $('#connectBtn').onclick = openConnect;
+  $('#backBtn').onclick = goBack;
+  $('#shClose').onclick = closeSheet;
+  $('#scrim').onclick = closeSheet;
+  window.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen()) closeSheet(); });
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => S.profile && render(), 80); });
+  // datalist of key names for the hotkey editor
+  const dl = h('datalist', { id: 'keylist' });
+  ['enter', 'tab', 'esc', 'space', 'backspace', 'delete', 'up', 'down', 'left', 'right', 'home', 'end', 'pageup', 'pagedown', 'printscreen', ...Array.from({ length: 24 }, (_, i) => 'f' + (i + 1)), 'playpause', 'nexttrack', 'prevtrack', 'volumeup', 'volumedown', 'volumemute'].forEach(k => dl.append(h('option', { value: k })));
+  document.body.append(dl);
+}
+boot();
+</script>
+<!--JRT-UPDATE:START (managed by shared/jrt-update; release.ps1 bumps the build number) -->
+<div id="jrt-update" role="status" aria-live="polite" hidden>
+  <span id="jrt-update-msg">A new version is ready.</span>
+  <button type="button" id="jrt-update-go">Update now</button>
+  <button type="button" id="jrt-update-later" aria-label="Later">Later</button>
+</div>
+<style>
+  #jrt-update{position:fixed;z-index:2147483000;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));
+    display:flex;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 32px));padding:10px 10px 10px 16px;border-radius:14px;
+    background:#16130f;color:#f6f1ea;border:1px solid rgba(255,255,255,.14);box-shadow:0 10px 30px rgba(0,0,0,.35);
+    font:500 14px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif;transform:translateY(0);opacity:1;transition:transform .22s ease,opacity .22s ease}
+  #jrt-update[hidden]{display:none}
+  #jrt-update.jrt-enter{transform:translateY(12px);opacity:0}
+  #jrt-update-msg{flex:1;min-width:0}
+  #jrt-update button{min-height:44px;padding:0 14px;border-radius:10px;border:0;cursor:pointer;font:inherit;font-weight:600}
+  #jrt-update-go{background:#f08a3c;color:#1a0f05}
+  #jrt-update-go:disabled{opacity:.6;cursor:progress}
+  #jrt-update-later{background:transparent;color:#cfc6ba}
+  #jrt-update button:focus-visible{outline:2px solid #f6f1ea;outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){#jrt-update{transition:none}}
+</style>
+<script>
+(function () {
+  var APP = 'pocketdeck', BUILD = 1 /*@JRT_BUILD@*/;
+  var VERSION_URL = 'https://raw.githubusercontent.com/Jrtorres13/' + APP + '/main/version.json';
+  var KEY = 'jrt-update:' + APP;
+  // The web copy (GitHub Pages) is always the newest already, and the phone can't run the PC updater.
+  var local = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  if (!local) return;
+
+  var box = document.getElementById('jrt-update'), msg = document.getElementById('jrt-update-msg'),
+      go = document.getElementById('jrt-update-go'), later = document.getElementById('jrt-update-later');
+  function read() { try { return JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
+  function write(v) { try { v ? sessionStorage.setItem(KEY, JSON.stringify(v)) : sessionStorage.removeItem(KEY); } catch (e) {} }
+  function show(text, busy) {
+    msg.textContent = text; go.disabled = !!busy; go.hidden = false; later.hidden = !!busy;
+    if (box.hidden) { box.hidden = false; box.classList.add('jrt-enter'); requestAnimationFrame(function () { box.classList.remove('jrt-enter'); }); }
+  }
+
+  // After "Update now": the updater replaces the files, and this page reloads until it is the new version.
+  var pending = read();
+  if (pending && pending.target) {
+    if (BUILD >= pending.target) { write(null); show('Updated. Youâ€™re on the newest version.'); go.hidden = true; later.textContent = 'OK'; later.hidden = false; }
+    else if (Date.now() - pending.at < 120000) { show('Updatingâ€¦ this window refreshes by itself.', true); setTimeout(function () { location.reload(); }, 4000); return; }
+    else { write(null); show('The update didnâ€™t finish. Check the update window, or try again.'); }
+  }
+
+  var latest = null;
+  function check() {
+    fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (v) {
+      if (!v || !(v.build > BUILD) || localStorage.getItem(KEY + ':skip') == v.build) return;
+      latest = v;
+      show('A new version is ready' + (v.notes ? ': ' + v.notes : '.'));
+    }).catch(function () { /* offline: try again later */ });
+  }
+  go.onclick = function () {
+    if (!latest) return;
+    write({ target: latest.build, at: Date.now() });
+    show('Updatingâ€¦ this window refreshes by itself.', true);
+    location.href = 'jrtapp://update/' + APP;
+    setTimeout(function () { location.reload(); }, 6000);
+  };
+  later.onclick = function () { if (latest) try { localStorage.setItem(KEY + ':skip', latest.build); } catch (e) {} box.hidden = true; };
+  check();
+  setInterval(check, 6 * 3600 * 1000);
+})();
+</script>
+<!--JRT-UPDATE:END-->
+</body>
+</html>
