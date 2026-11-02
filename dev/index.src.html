@@ -158,13 +158,35 @@ p { margin: 0; text-wrap: pretty; }
 .key.err { outline: 2px solid var(--color-error); outline-offset: 3px; animation: shake var(--dur-short) var(--ease-out); }
 @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 .key.empty { background: transparent; border: var(--rule-hair) dashed transparent; box-shadow: none; }
+/* v1.2: live info keys, dials, running light, tap/double/hold marker */
+.key.widget { gap: calc(var(--k) * 0.03); }
+.key.widget .ki { width: calc(var(--k) * 0.2 * var(--is, 1)); height: calc(var(--k) * 0.2 * var(--is, 1)); }
+.key.widget .wbig { font-family: var(--font-display); font-size: calc(var(--k) * 0.25); line-height: 1; letter-spacing: -0.03em; font-variant-numeric: lining-nums tabular-nums; color: var(--color-ink); white-space: nowrap; position: relative; z-index: var(--z-raised); }
+.key.widget .kl { font-size: clamp(9px, calc(var(--k) * 0.105), 13px); color: var(--color-muted); -webkit-line-clamp: 1; }
+.key.solid.widget .wbig, .key.live.widget .wbig, .key.solid.widget .kl, .key.live.widget .kl { color: currentColor; }
+.key .lvl { position: absolute; left: 16%; right: 16%; bottom: 10%; height: 3px; border-radius: 2px; background: var(--color-rule); overflow: hidden; }
+.key .lvl i { display: block; height: 100%; width: 100%; background: var(--kc); border-radius: inherit; transform: scaleX(var(--lv, 0)); transform-origin: left center; transition: transform var(--dur-short) var(--ease-out); }
+.key.solid .lvl, .key.live .lvl { background: color-mix(in oklab, currentColor 25%, transparent); }
+.key.solid .lvl i, .key.live .lvl i { background: currentColor; }
+.key.dial { cursor: ew-resize; }
+.key.dial .kl { margin-bottom: calc(var(--k) * 0.06); }
+.key .run { position: absolute; top: 11%; right: 12%; width: calc(var(--k) * 0.065); height: calc(var(--k) * 0.065); border-radius: 50%; background: var(--kc); box-shadow: 0 0 0 2px var(--color-paper-3); }
+.key.solid .run { background: currentColor; box-shadow: none; }
+.key .hold.two { box-shadow: calc(var(--k) * 0.12) 0 0 var(--kc); }
+.tgroups { display: grid; gap: var(--space-md); }
+.tgroup .lbl { display: block; margin-bottom: var(--space-xs); }
+.types.compact { grid-template-columns: repeat(auto-fill, minmax(min(100%, 96px), 1fr)); }
+.types.compact .type { min-height: 64px; padding: var(--space-xs) var(--space-sm); font-size: var(--text-xs); }
+.pagecol { display: grid; gap: var(--space-3xs); min-width: 0; }
+.inp.small { min-height: 36px; font-size: var(--text-xs); }
 body.editing .key.empty { border-color: var(--color-rule-strong); color: var(--color-muted); }
 body.editing .key:not(.empty) { outline: var(--rule-hair) solid var(--color-rule-strong); outline-offset: 3px; }
 .key.dragging { opacity: 0.3; }
 .key.drop { outline: 2px solid var(--color-focus) !important; outline-offset: 3px; }
 .ghost-key { position: fixed; z-index: var(--z-toast); pointer-events: none; transform: scale(1.06); box-shadow: var(--shadow-card); }
-.tabs { display: flex; gap: var(--space-2xs); justify-content: center; flex: 0 0 auto; overflow-x: auto; scrollbar-width: none; min-height: 44px; }
+.tabs { display: flex; gap: var(--space-2xs); justify-content: flex-start; padding: 0 var(--space-md); flex: 0 0 auto; overflow-x: auto; scrollbar-width: none; min-height: 44px; }
 .tabs::-webkit-scrollbar { display: none; }
+.tabs > :first-child { margin-left: auto; } .tabs > :last-child { margin-right: auto; }
 .tabs button { min-height: 40px; padding: 0 var(--space-sm); border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 500; color: var(--color-muted); white-space: nowrap; transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out); }
 .tabs button:hover { color: var(--color-ink); }
 .tabs button.cur { color: var(--color-ink); background: var(--color-paper-2); box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule); }
@@ -404,7 +426,7 @@ const isAndroid = /Android/i.test(navigator.userAgent);
 /* ============================================================ api */
 const S = {
   token: LS.get('pd.token', ''), local: false, pc: '', profile: null, rev: '', pageId: null, stack: [],
-  editing: false, live: {}, toggles: LS.get('pd.toggles', {}), online: true, paused: false, fails: 0, clip: null
+  editing: false, live: {}, toggles: LS.get('pd.toggles', {}), online: true, paused: false, fails: 0, clip: null, wst: {}, weather: {}
 };
 async function api(path, { method = 'GET', body, timeout = 6000 } = {}) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
@@ -480,6 +502,20 @@ function defaultProfile() {
 }
 
 const TEMPLATES = {
+  mixer: { name: 'Mixer (dials)', icon: 'sliders-vertical', make: () => ({ id: uid(), name: 'Mixer', keys: [
+    K('PC volume', 'volume-2', 'ember', { type: 'dial', preset: 'volume', step: 2 }), K('Spotify', 'music', 'sage', { type: 'dial', preset: 'appvol', app: 'spotify', step: 4 }), K('Discord', 'headphones', 'iris', { type: 'dial', preset: 'appvol', app: 'discord', step: 4 }),
+    K('Browser', 'globe', 'sky', { type: 'dial', preset: 'appvol', app: 'chrome', step: 4 }), K('Brightness', 'sun', 'amber', { type: 'dial', preset: 'brightness', step: 5 }), K('Tracks', 'music-2', 'cream', { type: 'dial', preset: 'media' }),
+    K('Mic', 'mic', 'cream', { type: 'audio', op: 'micmute' }), K('Mute Discord', 'volume-x', 'iris', { type: 'appvol', app: 'discord', op: 'mute' }), K('Next output', 'headphones', 'teal', { type: 'output', op: 'next', flow: 0 }),
+    K('Stop sounds', 'octagon-x', 'oxblood', { type: 'sound', op: 'stop' })
+  ] }) },
+  windows: { name: 'Windows and PC', icon: 'app-window-mac', make: () => ({ id: uid(), name: 'PC', keys: [
+    K('', 'clock', 'cream', { type: 'widget', kind: 'clock' }), K('', 'cpu', 'amber', { type: 'widget', kind: 'cpu' }), K('', 'memory-stick', 'sky', { type: 'widget', kind: 'ram' }),
+    K('', 'battery-medium', 'sage', { type: 'widget', kind: 'battery' }), K('', 'hourglass', 'ember', { type: 'widget', kind: 'timer', min: 25 }),
+    K('Snap left', 'panel-left', 'stone', { type: 'window', op: 'left' }), K('Snap right', 'panel-right', 'stone', { type: 'window', op: 'right' }), K('Maximize', 'maximize-2', 'stone', { type: 'window', op: 'max' }),
+    K('Next screen', 'monitor-up', 'stone', { type: 'window', op: 'nextmon' }), K('Keep on top', 'pin', 'amber', { type: 'window', op: 'ontop' }),
+    K('Brighter', 'sun', 'whiteheat', { type: 'brightness', op: 'up', value: 10 }), K('Dimmer', 'sun-dim', 'stone', { type: 'brightness', op: 'down', value: 10 }),
+    K('Task view', 'layout-grid', 'cream', { type: 'window', op: 'switch' }), K('Close window', 'x', 'oxblood', { type: 'window', op: 'close' }), K('Lock PC', 'lock', 'oxblood', { type: 'system', cmd: 'lock' })
+  ] }) },
   calls: { name: 'Video calls', icon: 'video', make: () => ({ id: uid(), name: 'Calls', keys: [
     K('Teams mic', 'mic-off', '#6366F1', hk('ctrl+shift+m')), K('Teams cam', 'video-off', '#6366F1', hk('ctrl+shift+o')), K('Teams hand', 'hand', '#6366F1', hk('ctrl+shift+k')),
     K('Zoom mic', 'mic-off', '#2563EB', hk('alt+a')), K('Zoom cam', 'video-off', '#2563EB', hk('alt+v')), K('Zoom share', 'screen-share', '#2563EB', hk('alt+s')),
@@ -651,6 +687,7 @@ function render() {
   } else if (topPages().length > 1) {
     topPages().forEach(p => tabs.append(h('button', { class: p.id === pg.id ? 'cur' : '', 'aria-current': p.id === pg.id ? 'page' : null, onclick: () => goPage(p.id) }, p.name)));
   }
+  const curTab = tabs.querySelector('.cur'); if (curTab) curTab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 function keyVisual(key) {
@@ -666,6 +703,12 @@ function keyVisual(key) {
     if (a.op === 'micmute' && L.micMuted) { icon = 'i:mic-off'; live = true; label = (label || 'Mic') + ' off'; }
     if ((a.op === 'up' || a.op === 'down' || a.op === 'set' || a.op === 'mute') && L.volume != null) badge = String(L.volume);
   }
+  if (a.type === 'appvol') {
+    const x = S.live.apps && S.live.apps[exeOf(a.app)];
+    if (x) { if (a.op === 'mute' && x.muted) { icon = 'i:volume-x'; live = true; } else if (a.op !== 'mute') badge = String(x.volume); }
+  }
+  if (a.type === 'brightness' && S.live.brightness != null) badge = String(S.live.brightness);
+  if (a.type === 'dial') { const v = dialValue(a); if (v != null) badge = String(v); if (dialMuted(a)) { live = true; icon = 'i:volume-x'; } }
   return { label, icon, color, iconColor, badge, live };
 }
 function keyId(key) { if (!key._id) key._id = uid(); return key._id; }
@@ -686,7 +729,11 @@ function keyEl(key, i) {
     return el;
   }
   const v = keyVisual(key);
+  const a = key.action || {};
+  const isW = a.type === 'widget', isDial = a.type === 'dial';
   const showLabel = settings().labels && !key.hideLabel && v.label;
+  const running = a.type === 'open' && !a.noRun && a.target && S.live.running && S.live.running.includes(exeOf(a.target));
+  const extra = !isW && !isDial && ((key.hold && key.hold.type && key.hold.type !== 'none') || (key.dbl && key.dbl.type && key.dbl.type !== 'none'));
   const full = v.icon && v.icon.startsWith('data:') && key.imgFull;
   const solid = (key.style || settings().keyStyle) === 'solid';
   const vars = [`--kc:${cssColor(v.color) || 'var(--key-cream)'}`];
@@ -694,19 +741,22 @@ function keyEl(key, i) {
   if (key.iconScale && key.iconScale !== 1) vars.push(`--is:${key.iconScale}`);
   if (solid) vars.push(`--on-kc:${isLight(v.color) ? 'var(--on-light)' : 'var(--on-dark)'}`);
   const el = h('button', {
-    class: 'key' + (solid ? ' solid' : '') + (showLabel ? '' : ' nolabel') + (full ? ' imgfull' : '') + (v.live ? ' live' : ''),
-    'data-i': i, 'aria-label': v.label || 'Key', style: vars.join(';')
+    class: 'key' + (solid ? ' solid' : '') + (showLabel ? '' : ' nolabel') + (full ? ' imgfull' : '') + (v.live ? ' live' : '') + (isW ? ' widget' : '') + (isDial ? ' dial' : ''),
+    'data-i': i, 'aria-label': v.label || (isW ? (WIDGETS.find(w => w[0] === a.kind) || [, 'Live info'])[1] : 'Key'), style: vars.join(';')
   },
     iconNode(v.icon), showLabel ? h('div', { class: 'kl' }, v.label) : null,
     v.badge ? h('div', { class: 'badge figure' }, v.badge) : null,
-    key.hold && key.hold.type && key.hold.type !== 'none' ? h('div', { class: 'hold', title: 'Has a long-press action' }) : null);
+    isDial && dialValue(a) != null ? h('div', { class: 'lvl', style: `--lv:${(dialValue(a) / 100).toFixed(3)}` }, h('i')) : null,
+    running ? h('div', { class: 'run', title: 'Running on the PC' }) : null,
+    extra ? h('div', { class: 'hold' + (key.dbl && key.dbl.type !== 'none' ? ' two' : ''), title: 'Has extra press actions' }) : null);
+  if (isW) { el.dataset.w = a.kind; fillWidget(el, key); }
   bindKey(el, key, i);
   return el;
 }
 
 /* ---------- press / hold / drag ---------- */
 function bindKey(el, key, i) {
-  let holdT, held = false, start = null, dragging = false, ghost = null, fired = false;
+  let holdT, held = false, start = null, dragging = false, ghost = null, fired = false, tapT = null, lastTap = 0, turned = 0;
   el.addEventListener('contextmenu', e => e.preventDefault());
   el.addEventListener('pointerdown', e => {
     if (e.button > 0) return;
@@ -715,9 +765,14 @@ function bindKey(el, key, i) {
     if (S.editing) return;
     if (!key) return;
     el.classList.add('pressed'); haptic();
+    const t = key.action && key.action.type;
+    turned = 0; S.dragging = true;
+    if (t === 'dial') return;
+    if (t === 'widget') { holdT = setTimeout(() => { held = true; fired = true; haptic(30); widgetPress(key, true); }, 480); return; }
     const hasHold = key.hold && key.hold.type && key.hold.type !== 'none';
+    const hasDbl = key.dbl && key.dbl.type && key.dbl.type !== 'none';
     if (hasHold) holdT = setTimeout(() => { held = true; fired = true; haptic(30); press(el, key, key.hold); }, 480);
-    else { fired = true; press(el, key, null); }
+    else if (!hasDbl) { fired = true; press(el, key, null); }
   });
   el.addEventListener('pointermove', e => {
     if (!start) return;
@@ -734,10 +789,15 @@ function bindKey(el, key, i) {
       document.querySelectorAll('.key.drop').forEach(k => k.classList.remove('drop'));
       const over = dropTarget(e); if (over && over !== el) over.classList.add('drop');
     }
-    if (!S.editing && !fired && Math.hypot(dx, dy) > 24) { clearTimeout(holdT); el.classList.remove('pressed'); start = null; }
+    if (!S.editing && key && key.action && key.action.type === 'dial') {
+      const n = Math.trunc((dx - dy) / 18) - turned;
+      if (n) { turned += n; clearTimeout(holdT); dialSend(el, key, n); }
+      return;
+    }
+    if (!S.editing && !fired && Math.hypot(dx, dy) > 24) { clearTimeout(holdT); el.classList.remove('pressed'); start = null; S.dragging = false; }
   });
   const end = e => {
-    clearTimeout(holdT); el.classList.remove('pressed');
+    clearTimeout(holdT); el.classList.remove('pressed'); S.dragging = false;
     if (!start) return;
     if (S.editing) {
       if (dragging) {
@@ -746,12 +806,20 @@ function bindKey(el, key, i) {
         document.querySelectorAll('.key.drop').forEach(k => k.classList.remove('drop'));
         if (over && over !== el) moveKey(i, +over.dataset.i);
       } else if (e.type === 'pointerup') openKeyEditor(i);
-    } else if (key && !fired && e.type === 'pointerup') { press(el, key, null); }
+    } else if (key && !fired && e.type === 'pointerup') {
+      const t = key.action && key.action.type;
+      if (t === 'dial') { if (!turned) runAction(dialPressAction(key.action), el).then(() => render()); }
+      else if (t === 'widget') widgetPress(key, false);
+      else if (key.dbl && key.dbl.type && key.dbl.type !== 'none') {
+        if (tapT && Date.now() - lastTap < 300) { clearTimeout(tapT); tapT = null; haptic(20); press(el, key, key.dbl); }
+        else { lastTap = Date.now(); tapT = setTimeout(() => { tapT = null; press(el, key, null); }, 280); }
+      } else press(el, key, null);
+    }
     start = null; dragging = false;
   };
   el.addEventListener('pointerup', end);
   el.addEventListener('pointercancel', end);
-  el.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); if (S.editing) openKeyEditor(i); else if (key) press(el, key, null); } });
+  el.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); if (S.editing) openKeyEditor(i); else if (key) { const t = key.action && key.action.type; if (t === 'widget') widgetPress(key, false); else if (t === 'dial') runAction(dialPressAction(key.action), el); else press(el, key, null); } } });
 }
 function dropTarget(e) {
   const els = document.elementsFromPoint(e.clientX, e.clientY);
@@ -807,7 +875,7 @@ function flash(el, ok) {
 }
 
 /* ---------- navigation ---------- */
-function goPage(id) { S.pageId = id; S.stack = []; render(); }
+function goPage(id) { S.pageId = id; S.stack = []; S.autoFrom = null; render(); }
 function openFolder(id) { S.stack.push(S.pageId); S.pageId = id; render(); }
 function goBack() { S.pageId = S.stack.pop() || (topPages()[0] && topPages()[0].id); render(); }
 function swipe(dir) {
@@ -817,7 +885,7 @@ function swipe(dir) {
 }
 (function wireSwipe() {
   let sx = null, sy = 0, st = 0;
-  document.addEventListener('pointerdown', e => { if (e.target.closest('#stage') && !S.editing) { sx = e.clientX; sy = e.clientY; st = Date.now(); } }, true);
+  document.addEventListener('pointerdown', e => { if (e.target.closest('#stage') && !S.editing && !e.target.closest('.key.dial')) { sx = e.clientX; sy = e.clientY; st = Date.now(); } }, true);
   document.addEventListener('pointerup', e => {
     if (sx == null) return; const dx = e.clientX - sx, dy = e.clientY - sy; sx = null;
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - st < 600) swipe(dx < 0 ? 1 : -1);
@@ -834,6 +902,8 @@ async function poll() {
     const wasOnline = S.online, wasPaused = S.paused; S.online = true; S.paused = !!r.paused;
     if (r.rev && S.rev && r.rev !== S.rev && !S.editing && !sheetOpen()) { S.rev = r.rev; await loadProfile(); render(); return; }
     if (r.rev && !S.rev) S.rev = r.rev;
+    autoSwitch();
+    if (S.dragging) return;
     if (was !== JSON.stringify(S.live) || !wasOnline || wasPaused !== S.paused) render();
   } catch (e) {
     S.fails++;
@@ -883,16 +953,20 @@ const ACTIONS = {
   text: { name: 'Type text', icon: 'type' }, media: { name: 'Media', icon: 'music' }, audio: { name: 'Volume & mic', icon: 'volume-2' },
   system: { name: 'System', icon: 'monitor' }, command: { name: 'Run command', icon: 'terminal' }, multi: { name: 'Multi-action', icon: 'layers' },
   toggle: { name: 'Toggle', icon: 'circle-dot' }, page: { name: 'Go to page', icon: 'panels-top-left' }, folder: { name: 'Folder', icon: 'folder' },
-  delay: { name: 'Wait', icon: 'timer' }, none: { name: 'Nothing', icon: 'x' }
+  delay: { name: 'Wait', icon: 'timer' }, none: { name: 'Nothing', icon: 'x' },
+  window: { name: 'Window', icon: 'app-window-mac' }, mouse: { name: 'Mouse', icon: 'mouse-pointer-click' }, appvol: { name: 'App volume', icon: 'audio-lines' },
+  output: { name: 'Audio device', icon: 'headphones' }, brightness: { name: 'Brightness', icon: 'sun' }, sound: { name: 'Soundboard', icon: 'music-2' },
+  dial: { name: 'Dial', icon: 'circle-gauge' }, widget: { name: 'Live info', icon: 'activity' }
 };
-const TOP_TYPES = ['hotkey', 'open', 'url', 'text', 'media', 'audio', 'system', 'command', 'multi', 'toggle', 'page', 'folder'];
-const STEP_TYPES = ['hotkey', 'open', 'url', 'text', 'media', 'audio', 'system', 'command', 'delay'];
-const SUB_TYPES = ['none', 'hotkey', 'open', 'url', 'text', 'media', 'audio', 'system', 'command', 'multi'];
-const HOLD_TYPES = ['none', 'hotkey', 'open', 'url', 'text', 'media', 'audio', 'system', 'command', 'multi', 'page'];
+const TYPE_GROUPS = [['Keys and text', ['hotkey', 'text', 'mouse']], ['Apps and windows', ['open', 'url', 'window', 'command']], ['Sound', ['media', 'audio', 'appvol', 'output', 'sound']], ['PC', ['system', 'brightness']], ['Combine', ['multi', 'toggle']], ['Deck', ['dial', 'widget', 'page', 'folder']]];
+const TOP_TYPES = TYPE_GROUPS.flatMap(g => g[1]);
+const STEP_TYPES = ['hotkey', 'open', 'url', 'text', 'media', 'audio', 'appvol', 'output', 'sound', 'system', 'brightness', 'window', 'mouse', 'command', 'delay'];
+const SUB_TYPES = ['none', 'hotkey', 'open', 'url', 'text', 'media', 'audio', 'appvol', 'output', 'sound', 'system', 'brightness', 'window', 'mouse', 'command', 'multi'];
+const HOLD_TYPES = ['none', 'hotkey', 'open', 'url', 'text', 'media', 'audio', 'appvol', 'output', 'sound', 'system', 'brightness', 'window', 'mouse', 'command', 'multi', 'page'];
 const MEDIA = [['playpause', 'Play / Pause', 'play'], ['next', 'Next track', 'skip-forward'], ['prev', 'Previous track', 'skip-back'], ['stop', 'Stop', 'square'], ['volup', 'Volume up (key)', 'volume-2'], ['voldown', 'Volume down (key)', 'volume-1'], ['mute', 'Mute (key)', 'volume-x']];
 const AUDIO = [['mute', 'Mute speakers (shows state)', 'volume-x'], ['micmute', 'Mute microphone (shows state)', 'mic-off'], ['up', 'Volume up by %', 'volume-2'], ['down', 'Volume down by %', 'volume-1'], ['set', 'Set volume to %', 'sliders-horizontal']];
 const SYSTEM = [['lock', 'Lock PC', 'lock'], ['screenshot', 'Screenshot (Snipping)', 'scan'], ['showdesktop', 'Show desktop', 'monitor'], ['taskmgr', 'Task Manager', 'cpu'], ['explorer', 'File Explorer', 'folder-open'], ['settings', 'Windows Settings', 'settings'], ['monitoroff', 'Turn off screen', 'monitor-off'], ['sleep', 'Sleep', 'moon'], ['signout', 'Sign out', 'user'], ['restart', 'Restart', 'refresh-cw'], ['shutdown', 'Shut down', 'power']];
-const DEF_ICON = { hotkey: 'keyboard', open: 'app-window', url: 'globe', text: 'type', media: 'play', audio: 'volume-2', system: 'monitor', command: 'terminal', multi: 'layers', toggle: 'circle-dot', page: 'panels-top-left', folder: 'folder' };
+const DEF_ICON = { hotkey: 'keyboard', open: 'app-window', url: 'globe', text: 'type', media: 'play', audio: 'volume-2', system: 'monitor', command: 'terminal', multi: 'layers', toggle: 'circle-dot', page: 'panels-top-left', folder: 'folder', window: 'app-window-mac', mouse: 'mouse-pointer-click', appvol: 'audio-lines', output: 'headphones', brightness: 'sun', sound: 'music-2', dial: 'volume-2', widget: 'clock' };
 
 function blankAction(type) {
   switch (type) {
@@ -908,6 +982,14 @@ function blankAction(type) {
     case 'page': return { type, page: (topPages().find(p => p.id !== S.pageId) || {}).id || '' };
     case 'folder': return { type, page: '' };
     case 'delay': return { type, ms: 500 };
+    case 'window': return { type, op: 'left' };
+    case 'mouse': return { type, op: 'left', value: 3 };
+    case 'appvol': return { type, app: '', op: 'mute', value: 10 };
+    case 'output': return { type, op: 'next', flow: 0, id: '' };
+    case 'brightness': return { type, op: 'up', value: 10 };
+    case 'sound': return { type, op: 'play', file: '', volume: 100 };
+    case 'dial': return { type, preset: 'volume', step: 2 };
+    case 'widget': return { type, kind: 'clock' };
     default: return { type: 'none' };
   }
 }
@@ -941,7 +1023,8 @@ function openKeyEditor(i) {
       key.action = blankAction(t);
       if (!key.icon || key.icon.startsWith('i:')) key.icon = 'i:' + DEF_ICON[t];
       if (t === 'folder' && (!key.color || key.color === 'k:cream')) key.color = 'k:amber';
-      drawAction(); drawToggleLook(); refreshPrev();
+      if (t === 'widget' || t === 'dial') { key.label = ''; labelIn.value = ''; }
+      drawAction(); drawToggleLook(); drawHold(); refreshPrev();
     }));
     actBox.append(h('div', { style: 'height:16px' }));
     actBox.append(actionForm(key.action, () => { refreshPrev(); }, key));
@@ -963,19 +1046,27 @@ function openKeyEditor(i) {
   // ---- hold
   key.hold = key.hold || { type: 'none' };
   const holdBox = h('div');
+  key.dbl = key.dbl || { type: 'none' };
   const drawHold = () => {
     holdBox.innerHTML = '';
-    holdBox.append(h('div', { class: 'field' }, h('label', {}, 'Long-press action (hold half a second)'),
+    hold.classList.toggle('hidden', key.action.type === 'widget' || key.action.type === 'dial');
+    holdBox.append(h('p', { class: 'hint', style: 'margin:0 0 12px' }, 'One key, up to three actions: tap, double-tap, and hold.'));
+    holdBox.append(h('div', { class: 'field' }, h('label', {}, 'Double-tap action'),
+      selectEl(HOLD_TYPES.map(t => [t, ACTIONS[t].name]), key.dbl.type, t => { key.dbl = blankAction(t); drawHold(); refreshPrev(); })));
+    if (key.dbl.type !== 'none') holdBox.append(h('div', { class: 'sub-box', style: 'margin-bottom:16px' }, actionForm(key.dbl, refreshPrev, null)));
+    holdBox.append(h('div', { class: 'field' }, h('label', {}, 'Hold action (half a second)'),
       selectEl(HOLD_TYPES.map(t => [t, ACTIONS[t].name]), key.hold.type, t => { key.hold = blankAction(t); drawHold(); refreshPrev(); })));
     if (key.hold.type !== 'none') holdBox.append(h('div', { class: 'sub-box' }, actionForm(key.hold, refreshPrev, null)));
   };
-  const hold = h('div', { class: 'sec' }, h('h3', {}, 'Extra'), holdBox);
+  const hold = h('div', { class: 'sec' }, h('h3', {}, 'Tap, double-tap, hold'), holdBox);
 
   body.append(prev, action, toggleLook, appearance, hold);
   drawAction(); drawToggleLook(); drawHold(); refreshPrev();
 
   const commit = () => {
     if (key.hold && key.hold.type === 'none') delete key.hold;
+    if (key.dbl && key.dbl.type === 'none') delete key.dbl;
+    if (key.action.type === 'widget' || key.action.type === 'dial') { delete key.hold; delete key.dbl; }
     if (key.action.type !== 'toggle') delete key.alt;
     // folder: create a folder page if needed
     if (key.action.type === 'folder' && !page(key.action.page)) {
@@ -988,14 +1079,16 @@ function openKeyEditor(i) {
     !isNew ? h('button', { class: 'round', 'aria-label': 'Delete key', title: 'Delete key', html: svg('trash-2'), onclick: async () => { pg.keys[i] = null; save(); closeSheet(); render(); toast('Key deleted'); } }) : null,
     !isNew ? h('button', { class: 'round', 'aria-label': 'Copy key', title: 'Copy key', html: svg('copy'), onclick: () => { S.clip = clone(key); delete S.clip._id; toast('Copied. Tap an empty key and press Paste.'); } }) : null,
     isNew && S.clip ? h('button', { class: 'pill ghost', onclick: () => { pg.keys[i] = clone(S.clip); save(); closeSheet(); render(); } }, I('clipboard-paste'), 'Paste') : null,
-    h('button', { class: 'pill ghost', style: 'margin-left:auto', onclick: async () => { const el = null; await runAction(key.action.type === 'toggle' ? key.action.a : key.action, el); } }, I('play'), 'Test'),
+    h('button', { class: 'pill ghost', style: 'margin-left:auto', onclick: async () => { const t = key.action.type; if (t === 'widget') { toast('Live info keys run on the deck. Save to see it.'); return; } await runAction(t === 'toggle' ? key.action.a : t === 'dial' ? dialPressAction(key.action) : key.action, null); } }, I('play'), 'Test'),
     h('button', { class: 'pill primary', onclick: commit }, 'Save')
   ].filter(Boolean);
   openSheet(isNew ? 'New key' : 'Edit key', body, { foot });
 }
 
 function typePicker(types, cur, onPick) {
-  return h('div', { class: 'types' }, types.map(t => h('button', { class: 'type' + (t === cur ? ' on' : ''), onclick: () => onPick(t) }, I(ACTIONS[t].icon), ACTIONS[t].name)));
+  const tile = t => h('button', { class: 'type' + (t === cur ? ' on' : ''), 'aria-pressed': t === cur ? 'true' : 'false', onclick: () => onPick(t) }, I(ACTIONS[t].icon), ACTIONS[t].name);
+  if (types !== TOP_TYPES) return h('div', { class: 'types' }, types.map(tile));
+  return h('div', { class: 'tgroups' }, TYPE_GROUPS.map(([name, ts]) => h('div', { class: 'tgroup' }, h('span', { class: 'lbl' }, name), h('div', { class: 'types compact' }, ts.map(tile)))));
 }
 function selectEl(opts, cur, onChange) {
   return h('select', { class: 'inp', onchange: e => onChange(e.target.value) }, opts.map(([v, l]) => h('option', { value: v, selected: v === cur }, l)));
@@ -1022,6 +1115,8 @@ function actionForm(a, changed, key) {
         h('button', { class: 'pill ghost', onclick: () => pickApp(app => { a.target = app.path; inp.value = app.path; setLabel(app.name, 'app-window'); autoIcon({ path: app.path }); }) }, I('search'), 'Pick app')),
         'Tip: works with Start Menu apps, .exe, documents, folders and shortcuts like <span class="kbd">spotify:</span> or <span class="kbd">ms-settings:</span>.'));
       box.append(field('Arguments (optional)', h('input', { class: 'inp mono', value: a.args || '', placeholder: '--new-window', oninput: e => { a.args = e.target.value; changed(); } })));
+      box.append(field('On press', segmented([['', 'Open'], ['focus', 'Switch to it'], ['close', 'Close it'], ['kill', 'Force quit']], a.mode || '', v => { a.mode = v || undefined; changed(); }), '“Switch to it” brings the app to the front, and opens it if it isn’t running.'));
+      if (key) box.append(switchRow('Show when it’s running', 'A small light in the corner of the key', !a.noRun, v => { a.noRun = !v || undefined; changed(); }));
       break;
     }
     case 'url':
@@ -1054,6 +1149,104 @@ function actionForm(a, changed, key) {
     case 'delay': {
       const out = h('span', { class: 'kbd' }, (a.ms || 0) + ' ms');
       box.append(h('div', { class: 'row' }, h('input', { type: 'range', class: 'grow', min: 50, max: 5000, step: 50, value: a.ms || 500, oninput: e => { a.ms = +e.target.value; out.textContent = a.ms + ' ms'; changed(); } }), out));
+      break;
+    }
+    case 'window':
+      box.append(h('div', { class: 'chips' }, WINDOW.map(([v, l, ic]) => h('button', { class: 'chip' + (a.op === v ? ' on' : ''), onclick: () => { a.op = v; setLabel(l, ic); box.replaceWith(actionForm(a, changed, key)); } }, I(ic), l))));
+      box.append(h('div', { class: 'hint' }, 'Works on the window that is in front on your PC.'));
+      break;
+    case 'mouse':
+      box.append(h('div', { class: 'chips' }, MOUSE.map(([v, l, ic]) => h('button', { class: 'chip' + (a.op === v ? ' on' : ''), onclick: () => { a.op = v; setLabel(l, ic); box.replaceWith(actionForm(a, changed, key)); } }, I(ic), l))));
+      if (/^(up|down|sleft|sright)$/.test(a.op)) {
+        const out = h('span', { class: 'kbd' }, (a.value || 3) + ' notches');
+        box.append(h('div', { style: 'height:16px' }), field('How far', h('div', { class: 'row' }, h('input', { type: 'range', class: 'grow', min: 1, max: 20, value: a.value || 3, oninput: e => { a.value = +e.target.value; out.textContent = a.value + ' notches'; changed(); } }), out)));
+      } else box.append(h('div', { class: 'hint' }, 'Clicks wherever the mouse pointer is on the PC.'));
+      break;
+    case 'appvol': {
+      box.append(h('div', { class: 'chips' }, APPVOL.map(([v, l, ic]) => h('button', { class: 'chip' + (a.op === v ? ' on' : ''), onclick: () => { a.op = v; if (v === 'set' && (a.value == null || a.value <= 25)) a.value = 50; if (v !== 'set' && (a.value == null || a.value > 25)) a.value = 10; box.replaceWith(actionForm(a, changed, key)); } }, I(ic), l))));
+      box.append(h('div', { style: 'height:16px' }), appField(a, changed, n => setLabel(n.charAt(0).toUpperCase() + n.slice(1), a.op === 'mute' ? 'volume-x' : 'audio-lines')));
+      if (a.op !== 'mute') {
+        const out = h('span', { class: 'kbd' }, (a.value || 0) + '%');
+        box.append(field(a.op === 'set' ? 'Volume' : 'Step size', h('div', { class: 'row' }, h('input', { type: 'range', class: 'grow', min: a.op === 'set' ? 0 : 1, max: a.op === 'set' ? 100 : 25, value: a.value || 10, oninput: e => { a.value = +e.target.value; out.textContent = a.value + '%'; changed(); } }), out)));
+      }
+      box.append(h('div', { class: 'hint' }, 'Like the Windows volume mixer: changes one app only. The app must be playing sound.'));
+      break;
+    }
+    case 'output': {
+      box.append(field('Which kind', segmented([['0', 'Speakers / headphones'], ['1', 'Microphone']], String(a.flow || 0), v => { a.flow = +v; a.id = ''; box.replaceWith(actionForm(a, changed, key)); })));
+      box.append(field('On press', segmented([['next', 'Cycle to the next one'], ['set', 'Switch to one device']], a.op, v => { a.op = v; box.replaceWith(actionForm(a, changed, key)); })));
+      if (a.op === 'set') {
+        const list = h('div', { class: 'chips' }, h('span', { class: 'hint', style: 'margin:0' }, 'Loading devices…'));
+        box.append(field('Device', list));
+        api('/api/audio-devices').then(r => {
+          list.innerHTML = '';
+          if (!r.ok) throw new Error(r.error);
+          const devs = (a.flow ? r.in : r.out) || [];
+          devs.forEach(d => list.append(h('button', { class: 'chip' + (a.id === d.id ? ' on' : ''), onclick: () => { a.id = d.id; a.name = d.name; setLabel(d.name.replace(/\s*\(.*\)$/, ''), a.flow ? 'mic' : 'speaker'); box.replaceWith(actionForm(a, changed, key)); } }, I(a.flow ? 'mic' : 'speaker'), d.name)));
+          if (!devs.length) list.append(h('span', { class: 'hint', style: 'margin:0' }, 'No devices found.'));
+        }).catch(e => { list.innerHTML = ''; list.append(h('span', { class: 'hint', style: 'margin:0' }, 'Could not load: ' + e.message)); });
+      }
+      break;
+    }
+    case 'brightness': {
+      box.append(h('div', { class: 'chips' }, BRIGHT.map(([v, l, ic]) => h('button', { class: 'chip' + (a.op === v ? ' on' : ''), onclick: () => { a.op = v; if (v === 'set') a.value = 70; else if (a.value > 25) a.value = 10; setLabel(l, ic); box.replaceWith(actionForm(a, changed, key)); } }, I(ic), l))));
+      const out = h('span', { class: 'kbd' }, (a.value || 0) + '%');
+      box.append(h('div', { style: 'height:16px' }), field(a.op === 'set' ? 'Brightness' : 'Step size', h('div', { class: 'row' }, h('input', { type: 'range', class: 'grow', min: a.op === 'set' ? 0 : 1, max: a.op === 'set' ? 100 : 25, value: a.value || 10, oninput: e => { a.value = +e.target.value; out.textContent = a.value + '%'; changed(); } }), out)),
+        h('div', { class: 'hint' }, 'Works on laptop screens. Most desktop monitors don’t allow it.'));
+      break;
+    }
+    case 'sound': {
+      box.append(field('On press', segmented([['play', 'Play a sound'], ['stop', 'Stop all sounds']], a.op || 'play', v => { a.op = v; if (v === 'stop') setLabel('Stop sounds', 'octagon-x'); box.replaceWith(actionForm(a, changed, key)); })));
+      if (a.op !== 'stop') {
+        const holder = h('div');
+        const up = h('input', { type: 'file', accept: 'audio/*,.mp3,.wav,.m4a,.aac,.wma', class: 'hidden', onchange: async e => {
+          const f = e.target.files[0]; if (!f) return;
+          if (f.size > 15 * 1024 * 1024) { toast('Sound is too big (15 MB max)', true); return; }
+          toast('Sending to your PC…');
+          try { const r = await api('/api/sounds', { method: 'POST', body: { name: f.name, data: await readB64(f) }, timeout: 60000 }); if (!r.ok) throw new Error(r.error); a.file = r.name; pick(r.name); sf.draw(r.sounds); toast('Sound added'); }
+          catch (err) { toast(err.message, true); }
+        } });
+        const pick = n => { setLabel(n.replace(/\.[^.]+$/, ''), 'music'); changed(); };
+        let sf = { draw: () => {} };
+        soundsField(a, pick).then(x => { sf = x; holder.append(x.box); });
+        const vol = h('span', { class: 'kbd' }, (a.volume || 100) + '%');
+        box.append(field('Sound', holder),
+          h('div', { class: 'row wrap', style: 'margin-bottom:16px' }, h('button', { class: 'pill small ghost', onclick: () => up.click() }, I('upload'), 'Add a sound file'), up),
+          field('Volume', h('div', { class: 'row' }, h('input', { type: 'range', class: 'grow', min: 5, max: 100, step: 5, value: a.volume || 100, oninput: e => { a.volume = +e.target.value; vol.textContent = a.volume + '%'; changed(); } }), vol)),
+          switchRow('Restart if already playing', 'Off: a second press stops it', a.restart, v => { a.restart = v; changed(); }),
+          h('div', { class: 'hint' }, 'Plays on the PC speakers. Sounds are kept in the PocketDeck folder on your PC. mp3, wav, m4a.'));
+      }
+      break;
+    }
+    case 'widget': {
+      box.append(h('div', { class: 'chips' }, WIDGETS.map(([v, l, ic]) => h('button', { class: 'chip' + (a.kind === v ? ' on' : ''), onclick: () => { a.kind = v; if (key) { key.icon = 'i:' + ic; key.label = ''; const li = document.querySelector('#shBody input[placeholder^="Label (optional)"]'); if (li) li.value = ''; } changed(); box.replaceWith(actionForm(a, changed, key)); } }, I(ic), l))));
+      const more = h('div', { style: 'margin-top:16px' });
+      if (a.kind === 'clock') more.append(switchRow('24-hour clock', null, a.h24, v => { a.h24 = v; changed(); }));
+      if (a.kind === 'timer') { const out = h('span', { class: 'kbd' }, (a.min || 5) + ' min'); more.append(field('Length', h('div', { class: 'row' }, h('input', { type: 'range', class: 'grow', min: 1, max: 120, value: a.min || 5, oninput: e => { a.min = +e.target.value; out.textContent = a.min + ' min'; changed(); } }), out)), h('div', { class: 'hint' }, 'Tap to start or pause. Hold to reset. The phone buzzes and the key lights up when time is up.')); }
+      if (a.kind === 'stopwatch') more.append(h('div', { class: 'hint', style: 'margin:0' }, 'Tap to start or stop. Hold to reset.'));
+      if (a.kind === 'counter') { more.append(field('Count by', segmented([['1', '1'], ['5', '5'], ['10', '10']], String(a.step || 1), v => { a.step = +v; changed(); })), h('div', { class: 'hint' }, 'Tap to add. Hold to reset to zero. Good for reps, takes or deaths.')); }
+      if (/^(cpu|ram|battery)$/.test(a.kind)) more.append(h('div', { class: 'hint', style: 'margin:0' }, 'Live from your PC, updated every 2 seconds.'));
+      if (a.kind === 'weather') more.append(field('City', h('input', { class: 'inp', value: a.city || '', placeholder: 'Chicago', oninput: e => { a.city = e.target.value; changed(); } })), field('Units', segmented([['f', '°F'], ['c', '°C']], a.unit || 'f', v => { a.unit = v; changed(); })), h('div', { class: 'hint' }, 'From Open-Meteo, refreshed every 15 minutes. Tap the key to refresh.'));
+      box.append(more);
+      break;
+    }
+    case 'dial': {
+      box.append(h('div', { class: 'hint', style: 'margin:0 0 12px' }, 'A knob on a key. Drag across it: right or up turns it up, left or down turns it down. Tap it to press.'));
+      box.append(h('div', { class: 'chips' }, DIALS.map(([v, l, ic]) => h('button', { class: 'chip' + (a.preset === v ? ' on' : ''), onclick: () => { a.preset = v; if (key) { key.icon = 'i:' + ic; key.label = v === 'appvol' ? '' : l; const li = document.querySelector('#shBody input[placeholder^="Label (optional)"]'); if (li) li.value = key.label; } changed(); box.replaceWith(actionForm(a, changed, key)); } }, I(ic), l))));
+      const more = h('div', { style: 'margin-top:16px' });
+      if (a.preset === 'appvol') more.append(appField(a, changed, n => setLabel(n.charAt(0).toUpperCase() + n.slice(1))));
+      if (/^(volume|appvol|brightness)$/.test(a.preset)) { const out = h('span', { class: 'kbd' }, (a.step || 2) + '%'); more.append(field('Each step', h('div', { class: 'row' }, h('input', { type: 'range', class: 'grow', min: 1, max: 10, value: a.step || 2, oninput: e => { a.step = +e.target.value; out.textContent = a.step + '%'; changed(); } }), out))); }
+      const tapText = { volume: 'Tap mutes the PC.', appvol: 'Tap mutes the app.', media: 'Turn to skip tracks. Tap plays or pauses.', zoom: 'Tap resets zoom.', scroll: 'Tap is a middle-click.', brightness: '' }[a.preset];
+      if (tapText) more.append(h('div', { class: 'hint', style: 'margin:0 0 12px' }, tapText));
+      if (a.preset === 'custom') {
+        [['right', 'Turn right / up'], ['left', 'Turn left / down'], ['press', 'Tap']].forEach(([s, l]) => {
+          a[s] = a[s] || { type: 'none' };
+          const sub = h('div', { class: 'sub-box' });
+          const draw = () => { sub.innerHTML = ''; sub.append(field(l, selectEl(SUB_TYPES.map(t => [t, ACTIONS[t].name]), a[s].type, t => { a[s] = blankAction(t); draw(); changed(); }))); if (a[s].type !== 'none') sub.append(actionForm(a[s], changed, null)); };
+          draw(); more.append(sub, h('div', { style: 'height:10px' }));
+        });
+      }
+      box.append(more);
       break;
     }
     case 'multi': box.append(multiForm(a, changed)); break;
@@ -1212,10 +1405,10 @@ function iconPicker(get, set, key, refresh, allowBlank) {
       pane.append(h('input', { class: 'inp', value: val, placeholder: 'Type or paste any emoji', maxlength: 8, oninput: e => set(e.target.value ? 'e:' + e.target.value : '') }),
         h('div', { class: 'chips', style: 'margin-top:8px' }, picks.map(p => h('button', { class: 'chip', style: 'font-size:20px', 'aria-label': p, onclick: () => { set('e:' + p); draw(); } }, p))));
     } else if (mode === 'image') {
-      const file = h('input', { type: 'file', accept: 'image/*', class: 'hidden', onchange: async e => { const f = e.target.files[0]; if (!f) return; try { set(await shrinkImage(f)); draw(); } catch (err) { toast(err.message, true); } } });
+      const file = h('input', { type: 'file', accept: 'image/*', class: 'hidden', onchange: async e => { const f = e.target.files[0]; if (!f) return; try { set(f.type === 'image/gif' && f.size < 400000 ? 'data:image/gif;base64,' + await readB64(f) : await shrinkImage(f)); draw(); } catch (err) { toast(err.message, true); } } });
       pane.append(h('div', { class: 'row' }, h('button', { class: 'pill ghost', onclick: () => file.click() }, I('upload'), 'Choose an image'), file));
       if (key) pane.append(switchRow('Fill the whole key', 'The picture covers the key', key.imgFull, v => { key.imgFull = v; refresh(); }));
-      pane.append(h('p', { class: 'hint' }, 'Logos and photos work well. They are shrunk to keep the deck quick.'));
+      pane.append(h('p', { class: 'hint' }, 'Logos, photos and animated GIFs (under 400 KB) work. Pictures are shrunk to keep the deck quick.'));
     }
     refresh();
   };
@@ -1305,7 +1498,8 @@ function openSettings() {
     pagesBox.innerHTML = '';
     const tops = topPages();
     tops.forEach((p, idx) => pagesBox.append(h('div', { class: 'li' },
-      h('input', { class: 'name grow', value: p.name, 'aria-label': 'Page name', oninput: e => { p.name = e.target.value; up(); } }),
+      h('div', { class: 'grow pagecol' }, h('input', { class: 'name', value: p.name, 'aria-label': 'Page name', oninput: e => { p.name = e.target.value; up(); } }),
+        h('input', { class: 'inp mono small', value: p.apps || '', placeholder: 'Open with app: chrome, obs64', 'aria-label': `Apps that open ${p.name}`, oninput: e => { p.apps = e.target.value; save(); } })),
       h('button', { class: 'round', 'aria-label': 'Move up', html: svg('arrow-up'), onclick: () => { movePage(p, -1); drawPages(); } }),
       h('button', { class: 'round', 'aria-label': 'Move down', html: svg('arrow-down'), onclick: () => { movePage(p, 1); drawPages(); } }),
       h('button', { class: 'round', 'aria-label': 'Delete page', html: svg('trash-2'), onclick: async () => {
@@ -1330,13 +1524,14 @@ function openSettings() {
   // templates
   body.append(h('div', { class: 'sec' }, h('h3', {}, 'Add a ready-made page'),
     h('div', { class: 'types' }, Object.entries(TEMPLATES).map(([k, t]) => h('button', { class: 'type', onclick: () => { const p = t.make(); P().pages.push(p); S.pageId = p.id; up(); closeSheet(); toast(`Added "${p.name}" page`); } }, I(t.icon), t.name))),
-    h('p', { class: 'hint' }, 'The streaming page uses Ctrl+Shift+F keys. Set the same hotkeys in OBS, under Settings, Hotkeys.')));
+    h('p', { class: 'hint' }, 'The streaming page uses Ctrl+Shift+F keys. Set the same hotkeys in OBS, under Settings, Hotkeys. Drag across a dial key to turn it.')));
   // behaviour
   body.append(h('div', { class: 'sec' }, h('h3', {}, 'Behavior'),
     switchRow('Show labels', null, st.labels, v => { st.labels = v; up(); }),
     switchRow('Haptic tap', isIOS ? 'iPhone: needs iOS 18+' : 'Vibrate on press', st.haptics, v => { st.haptics = v; up(); }),
     switchRow('Keep screen on', 'While the deck is open', st.awake, v => { st.awake = v; up(); setupAwake(); }),
     switchRow('Confirm power actions', 'Ask before shut down, restart, sleep, sign out', st.confirm, v => { st.confirm = v; up(); }),
+    switchRow('Follow the app in front', 'Jump to a page when its app is used on the PC (set apps under Pages)', st.autoSwitch !== false, v => { st.autoSwitch = v; up(); }),
 ));
   // device
   const dev = h('div', { class: 'sec' }, h('h3', {}, 'This device'),
@@ -1353,7 +1548,7 @@ function openSettings() {
       h('button', { class: 'pill small ghost', onclick: exportProfile }, I('download'), 'Export'),
       h('button', { class: 'pill small ghost', onclick: importProfile }, I('upload'), 'Import'),
       h('button', { class: 'pill small danger', onclick: async () => { if (await confirmDlg('Reset to the starter layout? Your keys will be replaced.', 'Reset')) { S.profile = defaultProfile(); S.pageId = null; S.stack = []; await saveNow(); await loadProfile(); render(); closeSheet(); } } }, 'Reset'))));
-  body.append(h('p', { class: 'hint', style: 'text-align:center' }, 'PocketDeck 1.1'));
+  body.append(h('p', { class: 'hint', style: 'text-align:center' }, 'PocketDeck 1.2'));
   openSheet('Settings', body);
 }
 function movePage(p, dir) {
@@ -1443,6 +1638,186 @@ async function setupAwake() {
   const start = () => { v.play().then(() => { nosleepOn = true; }).catch(() => {}); };
   start();
   if (!nosleepOn) document.addEventListener('pointerdown', start, { once: true });
+}
+
+/* ============================================================ v1.2: live info keys, dials, PC tools */
+const WINDOW = [['left', 'Snap left', 'panel-left'], ['right', 'Snap right', 'panel-right'], ['max', 'Maximize / restore', 'maximize-2'], ['min', 'Minimize', 'minimize-2'], ['nextmon', 'Move to next screen', 'monitor-up'], ['ontop', 'Keep on top', 'pin'], ['close', 'Close window', 'x'], ['switch', 'Task view', 'layout-grid'], ['deskleft', 'Desktop left', 'chevron-left'], ['deskright', 'Desktop right', 'chevron-right'], ['desknew', 'New desktop', 'square-plus']];
+const MOUSE = [['left', 'Click', 'mouse-pointer-click'], ['double', 'Double-click', 'mouse-pointer-2'], ['right', 'Right-click', 'mouse'], ['middle', 'Middle-click', 'pointer'], ['up', 'Scroll up', 'chevrons-up'], ['down', 'Scroll down', 'chevrons-down'], ['sleft', 'Scroll left', 'chevrons-left'], ['sright', 'Scroll right', 'chevrons-right']];
+const APPVOL = [['mute', 'Mute app (shows state)', 'volume-x'], ['up', 'App louder', 'volume-2'], ['down', 'App quieter', 'volume-1'], ['set', 'Set app volume', 'sliders-horizontal']];
+const BRIGHT = [['up', 'Brighter', 'sun'], ['down', 'Dimmer', 'sun-dim'], ['set', 'Set brightness', 'sliders-horizontal']];
+const WIDGETS = [['clock', 'Clock', 'clock'], ['timer', 'Timer', 'hourglass'], ['stopwatch', 'Stopwatch', 'timer'], ['counter', 'Counter', 'hash'], ['cpu', 'CPU', 'cpu'], ['ram', 'Memory', 'memory-stick'], ['battery', 'Battery', 'battery-medium'], ['weather', 'Weather', 'cloud-sun']];
+const DIALS = [['volume', 'PC volume', 'volume-2'], ['appvol', 'App volume', 'audio-lines'], ['brightness', 'Brightness', 'sun'], ['media', 'Tracks', 'music-2'], ['scroll', 'Scroll', 'mouse'], ['zoom', 'Zoom', 'zoom-in'], ['custom', 'Custom', 'circle-gauge']];
+const exeOf = t => String(t || '').split(/[\\/]/).pop().replace(/\.(exe|lnk)$/i, '').replace(/:$/, '').toLowerCase();
+const pad2 = n => String(n).padStart(2, '0');
+const fmtDur = ms => { const s = Math.max(0, Math.round(ms / 1000)), hh = Math.floor(s / 3600), mm = Math.floor(s / 60) % 60, ss = s % 60; return hh ? `${hh}:${pad2(mm)}:${pad2(ss)}` : `${mm}:${pad2(ss)}`; };
+
+/* ---------- live info keys ---------- */
+function wst(key) { const id = keyId(key); return S.wst[id] || (S.wst[id] = { running: false, acc: 0, since: 0, done: false }); }
+function wElapsed(st) { return st.acc + (st.running ? Date.now() - st.since : 0); }
+const WX_ICON = c => c === 0 ? 'sun' : c <= 2 ? 'cloud-sun' : c === 3 ? 'cloud' : c <= 48 ? 'cloud-fog' : c <= 57 ? 'cloud-drizzle' : c <= 67 ? 'cloud-rain' : c <= 77 ? 'cloud-snow' : c <= 82 ? 'cloud-rain' : c <= 86 ? 'cloud-snow' : 'cloud-lightning';
+async function fetchWeather(a) {
+  const k = (a.city || '').trim().toLowerCase() + '|' + (a.unit || 'f');
+  const c = S.weather[k] || (S.weather[k] = {});
+  if (c.busy || (c.at && Date.now() - c.at < 15 * 60000)) return;
+  c.busy = true;
+  try {
+    const g = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&name=' + encodeURIComponent(a.city))).json();
+    const p = g.results && g.results[0]; if (!p) throw new Error('City not found');
+    const w = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}&current=temperature_2m,weather_code&temperature_unit=${a.unit === 'c' ? 'celsius' : 'fahrenheit'}`)).json();
+    c.temp = Math.round(w.current.temperature_2m); c.code = w.current.weather_code; c.place = p.name; c.err = '';
+  } catch (e) { c.err = 'No weather'; }
+  c.at = Date.now(); c.busy = false; tickWidgets();
+}
+function widgetView(key) {
+  const a = key.action, L = S.live; let big = '', sub = '', icon = null, live = false, lvl = null;
+  switch (a.kind) {
+    case 'clock': {
+      const d = new Date(); let hh = d.getHours();
+      if (!a.h24) { sub = hh < 12 ? 'AM' : 'PM'; hh = hh % 12 || 12; }
+      big = `${hh}:${pad2(d.getMinutes())}`; sub = (sub ? sub + ' · ' : '') + d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+      break;
+    }
+    case 'timer': {
+      const st = wst(key), total = (a.min || 5) * 60000, left = total - wElapsed(st);
+      if (left <= 0 && st.running) { st.running = false; st.acc = total; st.done = true; haptic([200, 100, 200, 100, 200]); }
+      big = fmtDur(Math.max(0, left)); sub = st.done ? 'Done, tap to reset' : st.running ? 'Running' : st.acc ? 'Paused' : `${a.min || 5} min timer`;
+      live = st.done; lvl = 1 - Math.max(0, left) / total; break;
+    }
+    case 'stopwatch': { const st = wst(key); big = fmtDur(wElapsed(st)); sub = st.running ? 'Running' : st.acc ? 'Stopped' : 'Stopwatch'; break; }
+    case 'counter': big = String(key.count || 0); sub = key.label ? '' : 'Tap to count'; break;
+    case 'cpu': big = L.cpu != null ? L.cpu + '%' : '–'; sub = 'CPU'; lvl = L.cpu != null ? L.cpu / 100 : null; break;
+    case 'ram': big = L.ram != null ? L.ram + '%' : '–'; sub = 'Memory'; lvl = L.ram != null ? L.ram / 100 : null; break;
+    case 'battery':
+      big = L.battery != null ? L.battery + '%' : '–'; sub = L.battery == null ? 'No battery' : L.charging ? 'Charging' : 'Battery';
+      icon = L.charging ? 'battery-charging' : null; lvl = L.battery != null ? L.battery / 100 : null; live = L.battery != null && L.battery <= 15 && !L.charging; break;
+    case 'weather': {
+      if (!a.city) { big = '–'; sub = 'Set a city'; break; }
+      const c = S.weather[(a.city || '').trim().toLowerCase() + '|' + (a.unit || 'f')] || {};
+      fetchWeather(a);
+      big = c.temp != null ? c.temp + '°' : '–'; sub = c.err || c.place || a.city; icon = c.code != null ? WX_ICON(c.code) : null; break;
+    }
+  }
+  return { big, sub, icon, live, lvl };
+}
+function widgetPress(key, held) {
+  const a = key.action;
+  if (a.kind === 'timer' || a.kind === 'stopwatch') {
+    const st = wst(key);
+    if (held || st.done) { S.wst[keyId(key)] = { running: false, acc: 0, since: 0, done: false }; }
+    else if (st.running) { st.acc = wElapsed(st); st.running = false; }
+    else { st.since = Date.now(); st.running = true; }
+  } else if (a.kind === 'counter') { key.count = held ? 0 : (key.count || 0) + (a.step || 1); save(); }
+  else if (a.kind === 'weather') { const c = S.weather[(a.city || '').trim().toLowerCase() + '|' + (a.unit || 'f')]; if (c) c.at = 0; }
+  tickWidgets();
+}
+function fillWidget(el, key) {
+  const v = widgetView(key), showLabel = settings().labels && !key.hideLabel && key.label;
+  el.classList.toggle('live', v.live);
+  const icon = v.icon ? 'i:' + v.icon : key.icon;
+  el.replaceChildren(...[iconNode(icon), h('div', { class: 'wbig' }, v.big), h('div', { class: 'kl' }, showLabel ? key.label : v.sub),
+    v.lvl != null ? h('div', { class: 'lvl', style: `--lv:${Math.min(1, Math.max(0, v.lvl)).toFixed(3)}` }, h('i')) : null].filter(Boolean));
+}
+function tickWidgets() {
+  if (!S.profile) return;
+  const pg = curPage();
+  document.querySelectorAll('#grid .key[data-w]').forEach(el => { const k = pg.keys[+el.dataset.i]; if (k && k.action && k.action.type === 'widget') fillWidget(el, k); });
+}
+setInterval(() => { if (!document.hidden) tickWidgets(); }, 1000);
+
+/* ---------- dials (drag across a key, like a Stream Deck+ knob) ---------- */
+function dialValue(a) {
+  const L = S.live;
+  if (a.preset === 'volume') return L.volume;
+  if (a.preset === 'brightness') return L.brightness;
+  if (a.preset === 'appvol') { const x = L.apps && L.apps[exeOf(a.app)]; return x ? x.volume : null; }
+  return null;
+}
+function dialMuted(a) {
+  const L = S.live;
+  if (a.preset === 'volume') return !!L.muted;
+  if (a.preset === 'appvol') { const x = L.apps && L.apps[exeOf(a.app)]; return !!(x && x.muted); }
+  return false;
+}
+function dialStepAction(a, n) {
+  const dir = n > 0 ? 1 : -1, m = Math.abs(n), step = a.step || 2;
+  const rep = act => m === 1 ? act : { type: 'multi', steps: Array.from({ length: Math.min(m, 10) }, () => act) };
+  switch (a.preset) {
+    case 'volume': return { type: 'audio', op: dir > 0 ? 'up' : 'down', value: step * m };
+    case 'appvol': return { type: 'appvol', app: a.app, op: dir > 0 ? 'up' : 'down', value: step * m };
+    case 'brightness': return { type: 'brightness', op: dir > 0 ? 'up' : 'down', value: step * m };
+    case 'scroll': return { type: 'mouse', op: dir > 0 ? 'up' : 'down', value: m };
+    case 'zoom': return rep(hk(dir > 0 ? 'ctrl+=' : 'ctrl+-'));
+    case 'media': return rep({ type: 'media', key: dir > 0 ? 'next' : 'prev' });
+    default: return rep(dir > 0 ? (a.right || { type: 'none' }) : (a.left || { type: 'none' }));
+  }
+}
+function dialPressAction(a) {
+  switch (a.preset) {
+    case 'volume': return { type: 'audio', op: 'mute' };
+    case 'appvol': return { type: 'appvol', app: a.app, op: 'mute' };
+    case 'media': return { type: 'media', key: 'playpause' };
+    case 'zoom': return hk('ctrl+0');
+    case 'scroll': return { type: 'mouse', op: 'middle' };
+    case 'custom': return a.press || { type: 'none' };
+    default: return { type: 'none' };
+  }
+}
+function dialBump(a, n) {
+  const L = S.live, d = n * (a.step || 2), clamp = v => Math.max(0, Math.min(100, v));
+  if (a.preset === 'volume' && L.volume != null) { L.volume = clamp(L.volume + d); if (n > 0) L.muted = false; }
+  if (a.preset === 'brightness' && L.brightness != null) L.brightness = clamp(L.brightness + d);
+  if (a.preset === 'appvol') { const x = L.apps && L.apps[exeOf(a.app)]; if (x) { x.volume = clamp(x.volume + d); if (n > 0) x.muted = false; } }
+}
+function paintDial(el, key) {
+  const v = dialValue(key.action);
+  const b = el.querySelector('.badge'); if (b) b.textContent = v != null ? v : '';
+  const l = el.querySelector('.lvl'); if (l) l.style.setProperty('--lv', ((v != null ? v : 0) / 100).toFixed(3));
+}
+const dialQ = new Map();
+async function dialSend(el, key, n) {
+  const id = keyId(key); const q = dialQ.get(id) || { pending: 0, busy: false }; dialQ.set(id, q);
+  q.pending += n; dialBump(key.action, n); paintDial(el, key); haptic(6);
+  if (q.busy) return;
+  q.busy = true;
+  while (q.pending) {
+    const m = q.pending; q.pending = 0;
+    try { const r = await api('/api/run', { method: 'POST', body: dialStepAction(key.action, m), timeout: 8000 }); if (!r.ok) throw new Error(r.error || 'Failed'); }
+    catch (e) { flash(el, false); toast(e.message, true); q.pending = 0; }
+  }
+  q.busy = false;
+}
+
+/* ---------- smart pages: follow the app in front on the PC ---------- */
+function pageApps(p) { return String(p.apps || '').toLowerCase().split(/[,\s]+/).map(x => x.replace(/\.exe$/, '')).filter(Boolean); }
+function autoSwitch() {
+  const app = S.live.activeApp;
+  if (S.local || settings().autoSwitch === false || !app || app === S.lastApp) return;
+  if (S.editing || sheetOpen() || S.dragging || curPage().folder) return;
+  S.lastApp = app;
+  const target = topPages().find(p => pageApps(p).includes(app));
+  if (target) { if (target.id !== S.pageId) { const from = S.autoFrom || S.pageId; goPage(target.id); S.autoFrom = from; } }
+  else if (S.autoFrom) { const back = S.autoFrom; S.autoFrom = null; if (page(back)) goPage(back); }
+}
+
+/* ---------- PC lists for the editor ---------- */
+async function soundsField(a, changed) {
+  const box = h('div', { class: 'chips' }, h('span', { class: 'hint', style: 'margin:0' }, 'Loading sounds on your PC…'));
+  const draw = list => {
+    box.innerHTML = '';
+    list.forEach(n => box.append(h('button', { class: 'chip' + (a.file === n ? ' on' : ''), onclick: () => { a.file = n; changed(n); draw(list); } }, I('music'), n.replace(/\.[^.]+$/, ''))));
+    if (!list.length) box.append(h('span', { class: 'hint', style: 'margin:0' }, 'No sounds yet. Add one from this phone or PC.'));
+  };
+  try { const r = await api('/api/sounds'); draw(r.sounds || []); } catch (e) { box.innerHTML = ''; box.append(h('span', { class: 'hint' }, e.message)); }
+  return { box, draw };
+}
+function readB64(file) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = () => rej(new Error('Could not read file')); r.readAsDataURL(file); });
+}
+function appField(a, changed, onPick) {
+  const inp = h('input', { class: 'inp mono', value: a.app || '', placeholder: 'spotify, discord, chrome', oninput: e => { a.app = e.target.value.trim(); changed(); }, onchange: () => onPick && a.app && onPick(exeOf(a.app)) });
+  const chips = h('div', { class: 'chips', style: 'margin-top:8px' });
+  api('/api/sessions').then(r => (r.apps || []).forEach(n => chips.append(h('button', { class: 'chip' + (exeOf(a.app) === n ? ' on' : ''), onclick: () => { a.app = n; inp.value = n; chips.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.textContent === n)); onPick && onPick(n); changed(); } }, n)))).catch(() => {});
+  return field('App', h('div', {}, inp, chips), 'Pick an app that is playing sound now, or type its program name.');
 }
 
 /* ============================================================ wiring */

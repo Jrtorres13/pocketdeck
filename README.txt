@@ -25,7 +25,8 @@ USING IT
   and Record captures hotkeys from your keyboard).
 
 KEY TYPES
-Hotkey, Open app/file, Website, Type text, Media, Volume & mic
+Hotkey, Open app/file, Website, Type text, Media, Volume & mic,
+App volume, Audio device, Soundboard, Brightness, Window, Mouse, Dial, Live info
 (shows mute state live), System (lock, sleep, screenshot...),
 Run command, Multi-action (steps + waits), Toggle, Page, Folder.
 
@@ -34,6 +35,14 @@ MAKE IT YOURS
   a website logo, emoji, or your own picture.
 - Edit a key > Look: light color, icon color, icon size, solid or backlit.
 - Gear > Look: colorway (Ember, Deep red, Pure black, Light) and key shape.
+
+NEW IN 1.2 (Stream Deck features)
+- Tap, double-tap, hold: edit a key > Tap, double-tap, hold.
+- Dials: drag across a dial key to turn it (volume, app volume, brightness).
+- Live keys: clock, timer, stopwatch, counter, CPU, memory, battery, weather.
+- Soundboard, app volume, switch speakers/headset, window snapping, mouse.
+- Pages can follow the app you are using: Gear > Pages > "Open with app".
+- Try Gear > Add a ready-made page > Mixer (dials) or Windows and PC.
 
 TRAY ICON (bottom-right near the clock)
 Open editor, Connect a phone, Pause all buttons, Start with Windows,

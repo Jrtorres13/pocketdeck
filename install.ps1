@@ -25,7 +25,7 @@ if (-not $csc) { throw '.NET Framework 4 was not found. Turn it on in Windows Fe
 $exe = Join-Path $dest 'PocketDeck.exe'
 Write-Host 'Building PocketDeck...'
 & $csc /nologo /optimize+ /target:winexe "/out:$exe" "/win32icon:$(Join-Path $dest 'icon.ico')" `
-  /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll (Join-Path $dest 'PocketDeck.cs')
+  /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll (Join-Path $dest 'PocketDeck.cs')
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $exe)) { throw 'Build failed. Send the text above to Claude.' }
 
 # Let the phone reach the PC on home (Private) networks. Needs one admin "Yes".

@@ -1,7 +1,7 @@
 // PocketDeck - turns a phone into a Stream Deck style controller for this PC.
 // Written in C# 5 so the compiler built into Windows (.NET Framework 4.x csc.exe) can build it.
 // Build: csc /target:winexe /out:PocketDeck.exe /win32icon:icon.ico
-//        /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll PocketDeck.cs
+//        /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll PocketDeck.cs
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -22,7 +22,7 @@ namespace PocketDeck
 {
     static class Program
     {
-        public const string Version = "1.1.0";
+        public const string Version = "1.2.0";
         public static string AppDir;
         public static string DataDir;
         public static bool Headless;
@@ -459,11 +459,12 @@ namespace PocketDeck
                             try { Actions.Run(a, 0); }
                             catch (Exception ex) { err = ex.Message; }
                         }
-                        SendJson(ns, 200, err == null ? Obj("ok", true, "state", Audio.State()) : Obj("ok", false, "error", err));
+                        Sys.Invalidate();
+                        SendJson(ns, 200, err == null ? Obj("ok", true, "state", Sys.State()) : Obj("ok", false, "error", err));
                         return;
                     }
                 case "/api/state":
-                    SendJson(ns, 200, Obj("ok", true, "state", Audio.State(), "paused", Paused, "rev", ProfileRev()));
+                    SendJson(ns, 200, Obj("ok", true, "state", Sys.State(), "paused", Paused, "rev", ProfileRev()));
                     return;
                 case "/api/apps":
                     SendJson(ns, 200, Obj("apps", AppList.Get()));
@@ -482,6 +483,31 @@ namespace PocketDeck
                         catch (Exception ex) { SendJson(ns, 200, Obj("ok", false, "error", ex.Message)); }
                         return;
                     }
+                case "/api/audio-devices":
+                    try { SendJson(ns, 200, Obj("ok", true, "out", Audio.Devices(0), "in", Audio.Devices(1))); }
+                    catch (Exception ex) { SendJson(ns, 200, Obj("ok", false, "error", ex.Message)); }
+                    return;
+                case "/api/sessions":
+                    {
+                        var names = new ArrayList();
+                        try { foreach (string k in (Program.DryRun ? new List<string> { "spotify", "discord", "chrome" } : new List<string>(Audio.Sessions().Keys))) names.Add(k); } catch { }
+                        SendJson(ns, 200, Obj("ok", true, "apps", names));
+                        return;
+                    }
+                case "/api/sounds":
+                    try
+                    {
+                        if (r.Method == "POST")
+                        {
+                            var b = Json.Parse(r.Body) as Dictionary<string, object>;
+                            if (b == null) throw new Exception("Bad upload");
+                            string saved = Sounds.Save(Convert.ToString(b["name"]), Convert.ToString(b["data"]));
+                            SendJson(ns, 200, Obj("ok", true, "name", saved, "sounds", Sounds.List()));
+                        }
+                        else SendJson(ns, 200, Obj("ok", true, "sounds", Sounds.List()));
+                    }
+                    catch (Exception ex) { SendJson(ns, 200, Obj("ok", false, "error", ex.Message)); }
+                    return;
                 case "/api/connect":
                     if (!r.Local) { SendJson(ns, 403, Obj("error", "only on the PC")); return; }
                     {
@@ -567,6 +593,8 @@ namespace PocketDeck
                 case "open":
                 case "url":
                     {
+                        string mode = S(a, "mode");
+                        if (type == "open" && mode != "" && mode != "open") { WinOps.App(mode, S(a, "target"), S(a, "args")); break; }
                         string target = Environment.ExpandEnvironmentVariables(S(a, "target").Trim());
                         if (target == "") throw new Exception("Nothing to open");
                         if (type == "url" && target.IndexOf("://") < 0) target = "https://" + target;
@@ -626,6 +654,23 @@ namespace PocketDeck
                         Process.Start(psi);
                         break;
                     }
+                case "window": WinOps.Window(S(a, "op")); break;
+                case "app": WinOps.App(S(a, "op"), S(a, "target"), S(a, "args")); break;
+                case "mouse": { int n = 3; int.TryParse(S(a, "value"), out n); WinOps.Mouse(S(a, "op"), n); break; }
+                case "appvol":
+                    Audio.AppVolume(S(a, "app"), S(a, "op"), a.ContainsKey("value") ? Convert.ToDouble(a["value"]) : 10);
+                    break;
+                case "output": Audio.Output(S(a, "op"), S(a, "id"), S(a, "flow") == "1" ? 1 : 0); break;
+                case "brightness":
+                    {
+                        string op = S(a, "op"); double v = a.ContainsKey("value") ? Convert.ToDouble(a["value"]) : 10;
+                        if (op == "set") Brightness.Set((int)v); else Brightness.Step(op == "down" ? -1 : 1, (int)v);
+                        break;
+                    }
+                case "sound":
+                    if (S(a, "op") == "stop") Sounds.StopAll();
+                    else { int vol = 100; int.TryParse(S(a, "volume"), out vol); Sounds.Play(S(a, "file"), vol <= 0 ? 100 : vol, S(a, "restart") == "True" || S(a, "restart") == "true"); }
+                    break;
                 case "delay":
                     {
                         int ms = 0; int.TryParse(S(a, "ms"), out ms);
@@ -783,7 +828,7 @@ namespace PocketDeck
         [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         interface IMMDeviceEnumerator
         {
-            [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
+            [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IMMDeviceCollection devices);
             [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint);
         }
 
@@ -791,6 +836,8 @@ namespace PocketDeck
         interface IMMDevice
         {
             [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
+            [PreserveSig] int OpenPropertyStore(int access, out IPropertyStore props);
+            [PreserveSig] int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
         }
 
         [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -811,13 +858,19 @@ namespace PocketDeck
             void GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
         }
 
-        static IAudioEndpointVolume Endpoint(bool mic)
+        static IMMDevice Device(bool mic)
         {
             var en = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
             IMMDevice dev;
             int hr = en.GetDefaultAudioEndpoint(mic ? 1 : 0, mic ? 2 : 1, out dev);
             if (hr != 0 || dev == null) hr = en.GetDefaultAudioEndpoint(mic ? 1 : 0, 0, out dev);
             if (hr != 0 || dev == null) throw new Exception(mic ? "No microphone found" : "No speakers found");
+            return dev;
+        }
+
+        static IAudioEndpointVolume Endpoint(bool mic)
+        {
+            IMMDevice dev = Device(mic);
             Guid iid = typeof(IAudioEndpointVolume).GUID;
             object o;
             Marshal.ThrowExceptionForHR(dev.Activate(ref iid, 23, IntPtr.Zero, out o));
@@ -861,6 +914,526 @@ namespace PocketDeck
             catch { }
             try { var mic = Endpoint(true); bool mm; mic.GetMute(out mm); d["micMuted"] = mm; } catch { }
             return d;
+        }
+
+        // ---- devices (switch speakers / headphones)
+        [Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IMMDeviceCollection
+        {
+            [PreserveSig] int GetCount(out uint n);
+            [PreserveSig] int Item(uint i, out IMMDevice dev);
+        }
+
+        [Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IPropertyStore
+        {
+            [PreserveSig] int GetCount(out uint n);
+            [PreserveSig] int GetAt(uint i, out PROPERTYKEY key);
+            [PreserveSig] int GetValue(ref PROPERTYKEY key, out PROPVARIANT v);
+        }
+        [StructLayout(LayoutKind.Sequential)] struct PROPERTYKEY { public Guid fmtid; public int pid; }
+        [StructLayout(LayoutKind.Sequential)] struct PROPVARIANT { public ushort vt, r1, r2, r3; public IntPtr p, p2; }
+        [DllImport("ole32.dll")] static extern int PropVariantClear(ref PROPVARIANT v);
+
+        [ComImport, Guid("870af99c-171d-4f9e-af0d-e63df40c2bc9")] class PolicyConfigCom { }
+        [Guid("f8679f50-850a-41cf-9c72-430f290290c8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IPolicyConfig
+        {
+            [PreserveSig] int GetMixFormat(IntPtr a, IntPtr b);
+            [PreserveSig] int GetDeviceFormat(IntPtr a, int b, IntPtr c);
+            [PreserveSig] int ResetDeviceFormat(IntPtr a);
+            [PreserveSig] int SetDeviceFormat(IntPtr a, IntPtr b, IntPtr c);
+            [PreserveSig] int GetProcessingPeriod(IntPtr a, int b, IntPtr c, IntPtr d);
+            [PreserveSig] int SetProcessingPeriod(IntPtr a, IntPtr b);
+            [PreserveSig] int GetShareMode(IntPtr a, IntPtr b);
+            [PreserveSig] int SetShareMode(IntPtr a, IntPtr b);
+            [PreserveSig] int GetPropertyValue(IntPtr a, IntPtr b, IntPtr c);
+            [PreserveSig] int SetPropertyValue(IntPtr a, IntPtr b, IntPtr c);
+            [PreserveSig] int SetDefaultEndpoint([MarshalAs(UnmanagedType.LPWStr)] string id, int role);
+            [PreserveSig] int SetEndpointVisibility([MarshalAs(UnmanagedType.LPWStr)] string id, int visible);
+        }
+
+        static string DeviceName(IMMDevice d)
+        {
+            IPropertyStore ps;
+            if (d.OpenPropertyStore(0, out ps) != 0 || ps == null) return "Audio device";
+            var key = new PROPERTYKEY { fmtid = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), pid = 14 };
+            PROPVARIANT v;
+            if (ps.GetValue(ref key, out v) != 0) return "Audio device";
+            string s = v.vt == 31 ? Marshal.PtrToStringUni(v.p) : "Audio device";
+            PropVariantClear(ref v);
+            return s;
+        }
+
+        // flow 0 = speakers/headphones, 1 = microphones
+        public static ArrayList Devices(int flow)
+        {
+            var l = new ArrayList();
+            if (Program.DryRun)
+            {
+                if (flow == 0) { l.Add(Sys.Obj("id", "spk", "name", "Speakers (Realtek Audio)", "default", true)); l.Add(Sys.Obj("id", "hp", "name", "Headphones (USB)", "default", false)); }
+                else l.Add(Sys.Obj("id", "mic", "name", "Microphone Array", "default", true));
+                return l;
+            }
+            var en = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
+            string def = "";
+            IMMDevice dd;
+            if (en.GetDefaultAudioEndpoint(flow, 1, out dd) == 0 && dd != null) dd.GetId(out def);
+            IMMDeviceCollection col;
+            Marshal.ThrowExceptionForHR(en.EnumAudioEndpoints(flow, 1, out col));
+            uint n; col.GetCount(out n);
+            for (uint i = 0; i < n; i++)
+            {
+                IMMDevice d; if (col.Item(i, out d) != 0 || d == null) continue;
+                string id; d.GetId(out id);
+                l.Add(Sys.Obj("id", id, "name", DeviceName(d), "default", id == def));
+            }
+            return l;
+        }
+
+        public static void SetDefault(string id)
+        {
+            var pc = (IPolicyConfig)new PolicyConfigCom();
+            for (int role = 0; role < 3; role++) Marshal.ThrowExceptionForHR(pc.SetDefaultEndpoint(id, role));
+        }
+
+        public static void Output(string op, string id, int flow)
+        {
+            var list = Devices(flow);
+            if (list.Count == 0) throw new Exception("No audio devices found");
+            if (op == "next")
+            {
+                int cur = 0;
+                for (int i = 0; i < list.Count; i++) if ((bool)((Dictionary<string, object>)list[i])["default"]) cur = i;
+                id = (string)((Dictionary<string, object>)list[(cur + 1) % list.Count])["id"];
+            }
+            if (string.IsNullOrEmpty(id)) throw new Exception("No device picked");
+            SetDefault(id);
+        }
+
+        // ---- per-app volume (the Windows volume mixer)
+        [Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IAudioSessionManager2
+        {
+            [PreserveSig] int GetAudioSessionControl(IntPtr guid, int flags, out IntPtr ctl);
+            [PreserveSig] int GetSimpleAudioVolume(IntPtr guid, int flags, out IntPtr vol);
+            [PreserveSig] int GetSessionEnumerator(out IAudioSessionEnumerator e);
+        }
+        [Guid("E2F5BB11-0570-40CA-ACDD-3AA01277DEE8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IAudioSessionEnumerator
+        {
+            [PreserveSig] int GetCount(out int n);
+            [PreserveSig] int GetSession(int i, out IAudioSessionControl2 s);
+        }
+        [Guid("bfb7ff88-7239-4fc9-8fa2-07c950be9c6d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IAudioSessionControl2
+        {
+            [PreserveSig] int GetState(out int st);
+            [PreserveSig] int GetDisplayName(out IntPtr s);
+            [PreserveSig] int SetDisplayName(IntPtr s, IntPtr ctx);
+            [PreserveSig] int GetIconPath(out IntPtr s);
+            [PreserveSig] int SetIconPath(IntPtr s, IntPtr ctx);
+            [PreserveSig] int GetGroupingParam(out Guid g);
+            [PreserveSig] int SetGroupingParam(IntPtr g, IntPtr ctx);
+            [PreserveSig] int RegisterAudioSessionNotification(IntPtr n);
+            [PreserveSig] int UnregisterAudioSessionNotification(IntPtr n);
+            [PreserveSig] int GetSessionIdentifier(out IntPtr s);
+            [PreserveSig] int GetSessionInstanceIdentifier(out IntPtr s);
+            [PreserveSig] int GetProcessId(out uint pid);
+        }
+        [Guid("87CE5498-68D6-44E5-9215-6F0D9C3F00C0"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface ISimpleAudioVolume
+        {
+            [PreserveSig] int SetMasterVolume(float v, ref Guid ctx);
+            [PreserveSig] int GetMasterVolume(out float v);
+            [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool m, ref Guid ctx);
+            [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool m);
+        }
+
+        // app name (lowercase exe, no .exe) -> its volume controls
+        static List<KeyValuePair<string, ISimpleAudioVolume>> SessionList()
+        {
+            var res = new List<KeyValuePair<string, ISimpleAudioVolume>>();
+            IMMDevice dev = Device(false);
+            Guid iid = typeof(IAudioSessionManager2).GUID;
+            object o;
+            Marshal.ThrowExceptionForHR(dev.Activate(ref iid, 23, IntPtr.Zero, out o));
+            IAudioSessionEnumerator e;
+            Marshal.ThrowExceptionForHR(((IAudioSessionManager2)o).GetSessionEnumerator(out e));
+            int n; e.GetCount(out n);
+            for (int i = 0; i < n; i++)
+            {
+                IAudioSessionControl2 s;
+                if (e.GetSession(i, out s) != 0 || s == null) continue;
+                uint pid; s.GetProcessId(out pid);
+                if (pid == 0) continue; // system sounds
+                string name;
+                try { using (var p = Process.GetProcessById((int)pid)) name = p.ProcessName.ToLowerInvariant(); } catch { continue; }
+                res.Add(new KeyValuePair<string, ISimpleAudioVolume>(name, (ISimpleAudioVolume)s));
+            }
+            return res;
+        }
+
+        public static Dictionary<string, object> Sessions()
+        {
+            var d = new Dictionary<string, object>();
+            foreach (var kv in SessionList())
+            {
+                if (d.ContainsKey(kv.Key)) continue;
+                float v; bool m; kv.Value.GetMasterVolume(out v); kv.Value.GetMute(out m);
+                d[kv.Key] = Sys.Obj("volume", (int)Math.Round(v * 100), "muted", m);
+            }
+            return d;
+        }
+
+        public static void AppVolume(string app, string op, double value)
+        {
+            string name = WinOps.ExeName(app);
+            if (name == "") throw new Exception("No app picked");
+            bool found = false; Guid g = Guid.Empty;
+            bool? newMute = null; float? newVol = null;
+            foreach (var kv in SessionList())
+            {
+                if (kv.Key != name) continue;
+                found = true;
+                var sv = kv.Value;
+                if (op == "mute")
+                {
+                    if (newMute == null) { bool m; sv.GetMute(out m); newMute = !m; }
+                    sv.SetMute(newMute.Value, ref g);
+                }
+                else
+                {
+                    if (newVol == null)
+                    {
+                        float cur; sv.GetMasterVolume(out cur);
+                        double t = op == "set" ? value : Math.Round(cur * 100) + (op == "up" ? value : -value);
+                        newVol = (float)Math.Max(0, Math.Min(1, t / 100.0));
+                    }
+                    sv.SetMasterVolume(newVol.Value, ref g);
+                    if (newVol.Value > 0) sv.SetMute(false, ref g);
+                }
+            }
+            if (!found) throw new Exception("That app isn't playing sound right now");
+            Sys.Invalidate();
+        }
+    }
+
+    // ---------------------------------------------------------------- live PC state (stats, focused app, running apps)
+    static class Sys
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        struct MEMSTATUS { public uint len, load; public ulong total, avail, totalPage, availPage, totalVirt, availVirt, availExt; }
+        [DllImport("kernel32.dll")] static extern bool GlobalMemoryStatusEx(ref MEMSTATUS m);
+        [DllImport("kernel32.dll")] static extern bool GetSystemTimes(out long idle, out long kernel, out long user);
+        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+
+        static readonly object gate = new object();
+        static Dictionary<string, object> cached; static DateTime cachedAt = DateTime.MinValue;
+        static long lastIdle, lastTotal; static int cpu;
+        static int bright = -1; static DateTime brightAt = DateTime.MinValue;
+
+        public static void Invalidate() { lock (gate) cachedAt = DateTime.MinValue; }
+        public static void BrightnessChanged(int v) { bright = v; brightAt = DateTime.UtcNow; Invalidate(); }
+
+        // Everything the phone shows live. Cached so several phones polling don't add load.
+        public static Dictionary<string, object> State()
+        {
+            lock (gate)
+            {
+                if (cached != null && (DateTime.UtcNow - cachedAt).TotalMilliseconds < 700) return cached;
+                var d = Audio.State();
+                if (Program.DryRun)
+                {
+                    d["cpu"] = 23; d["ram"] = 61; d["battery"] = 80; d["charging"] = true; d["brightness"] = 60;
+                    d["activeApp"] = "chrome"; d["running"] = new ArrayList { "chrome", "spotify", "explorer", "discord" };
+                    d["apps"] = new Dictionary<string, object> { { "spotify", Obj("volume", 70, "muted", false) }, { "discord", Obj("volume", 100, "muted", true) } };
+                }
+                else
+                {
+                    try { d["cpu"] = Cpu(); } catch { }
+                    try { var m = new MEMSTATUS(); m.len = (uint)Marshal.SizeOf(typeof(MEMSTATUS)); if (GlobalMemoryStatusEx(ref m)) d["ram"] = (int)m.load; } catch { }
+                    try
+                    {
+                        var ps = SystemInformation.PowerStatus;
+                        if ((ps.BatteryChargeStatus & BatteryChargeStatus.NoSystemBattery) == 0 && ps.BatteryLifePercent <= 1f)
+                        { d["battery"] = (int)Math.Round(ps.BatteryLifePercent * 100); d["charging"] = ps.PowerLineStatus == PowerLineStatus.Online; }
+                    }
+                    catch { }
+                    try { d["activeApp"] = ActiveApp(); } catch { }
+                    try
+                    {
+                        var names = new SortedSet<string>();
+                        foreach (var p in Process.GetProcesses()) { try { names.Add(p.ProcessName.ToLowerInvariant()); } catch { } p.Dispose(); }
+                        d["running"] = new ArrayList(new List<string>(names));
+                    }
+                    catch { }
+                    try { d["apps"] = Audio.Sessions(); } catch { }
+                    if ((DateTime.UtcNow - brightAt).TotalSeconds > 15) { brightAt = DateTime.UtcNow; try { bright = Brightness.Get(); } catch { bright = -1; } }
+                    if (bright >= 0) d["brightness"] = bright;
+                }
+                cached = d; cachedAt = DateTime.UtcNow;
+                return d;
+            }
+        }
+
+        static int Cpu()
+        {
+            long idle, kernel, user;
+            if (!GetSystemTimes(out idle, out kernel, out user)) return cpu;
+            long total = kernel + user; // kernel time includes idle
+            long dt = total - lastTotal, di = idle - lastIdle;
+            if (lastTotal != 0 && dt > 0) cpu = (int)Math.Round(100.0 * (dt - di) / dt);
+            lastTotal = total; lastIdle = idle;
+            return Math.Max(0, Math.Min(100, cpu));
+        }
+
+        public static string ActiveApp()
+        {
+            uint pid; GetWindowThreadProcessId(GetForegroundWindow(), out pid);
+            if (pid == 0) return "";
+            using (var p = Process.GetProcessById((int)pid)) return p.ProcessName.ToLowerInvariant();
+        }
+
+        public static Dictionary<string, object> Obj(params object[] kv)
+        {
+            var d = new Dictionary<string, object>();
+            for (int i = 0; i + 1 < kv.Length; i += 2) d[(string)kv[i]] = kv[i + 1];
+            return d;
+        }
+    }
+
+    // ---------------------------------------------------------------- windows and apps
+    static class WinOps
+    {
+        [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+        [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr h);
+        [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+        [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+        [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int idx);
+        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, IntPtr extra);
+
+        public static void Window(string op)
+        {
+            IntPtr fg = Sys.GetForegroundWindow();
+            switch (op)
+            {
+                case "left": Input.Hotkey("win+left"); break;
+                case "right": Input.Hotkey("win+right"); break;
+                case "max": ShowWindow(fg, IsZoomed(fg) ? 9 : 3); break;
+                case "min": ShowWindow(fg, 6); break;
+                case "nextmon": Input.Hotkey("win+shift+right"); break;
+                case "close": PostMessage(fg, 0x0010, IntPtr.Zero, IntPtr.Zero); break;
+                case "ontop":
+                    {
+                        bool top = (GetWindowLong(fg, -20) & 0x8) != 0;
+                        SetWindowPos(fg, top ? new IntPtr(-2) : new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
+                        break;
+                    }
+                case "switch": Input.Hotkey("win+tab"); break;
+                case "deskleft": Input.Hotkey("ctrl+win+left"); break;
+                case "deskright": Input.Hotkey("ctrl+win+right"); break;
+                case "desknew": Input.Hotkey("ctrl+win+d"); break;
+                default: throw new Exception("Unknown window action");
+            }
+        }
+
+        // "C:\...\Spotify.exe", "spotify", or a Start Menu .lnk -> "spotify"
+        public static string ExeName(string target)
+        {
+            string t = Environment.ExpandEnvironmentVariables((target ?? "").Trim().Trim('"'));
+            if (t.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) && File.Exists(t))
+            {
+                try
+                {
+                    Type st = Type.GetTypeFromProgID("WScript.Shell");
+                    object sh = Activator.CreateInstance(st);
+                    object lnk = st.InvokeMember("CreateShortcut", System.Reflection.BindingFlags.InvokeMethod, null, sh, new object[] { t });
+                    string tp = Convert.ToString(lnk.GetType().InvokeMember("TargetPath", System.Reflection.BindingFlags.GetProperty, null, lnk, null));
+                    if (tp != "") t = tp;
+                }
+                catch { }
+            }
+            string n = Path.GetFileName(t);
+            if (n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) n = n.Substring(0, n.Length - 4);
+            return n.TrimEnd(':').ToLowerInvariant();
+        }
+
+        static Process[] Find(string target)
+        {
+            string n = ExeName(target);
+            if (n == "") throw new Exception("No app set");
+            return Process.GetProcessesByName(n);
+        }
+
+        public static void App(string op, string target, string args)
+        {
+            if (op == "close" || op == "kill")
+            {
+                var ps = Find(target);
+                if (ps.Length == 0) throw new Exception("That app is not running");
+                foreach (var p in ps)
+                {
+                    try { if (op == "kill") p.Kill(); else if (p.MainWindowHandle != IntPtr.Zero) p.CloseMainWindow(); } catch { }
+                }
+                Sys.Invalidate();
+                return;
+            }
+            // "focus": bring it to the front if running, otherwise start it.
+            foreach (var p in Find(target))
+            {
+                IntPtr hw = p.MainWindowHandle;
+                if (hw == IntPtr.Zero) continue;
+                if (IsIconic(hw)) ShowWindow(hw, 9);
+                keybd_event(0x12, 0, 0, IntPtr.Zero); keybd_event(0x12, 0, 2, IntPtr.Zero); // Alt tap lets us take focus
+                SetForegroundWindow(hw);
+                return;
+            }
+            var psi = new ProcessStartInfo(Environment.ExpandEnvironmentVariables(target.Trim())) { UseShellExecute = true };
+            if (!string.IsNullOrEmpty(args)) psi.Arguments = args;
+            Process.Start(psi);
+        }
+
+        public static void Mouse(string op, int amount)
+        {
+            var list = new List<Native.INPUT>();
+            Func<uint, int, Native.INPUT> M = (flags, data) => { var i = new Native.INPUT(); i.type = 0; i.U.mi.dwFlags = flags; i.U.mi.mouseData = unchecked((uint)data); return i; };
+            if (amount <= 0) amount = 3;
+            switch (op)
+            {
+                case "left": list.Add(M(0x2, 0)); list.Add(M(0x4, 0)); break;
+                case "double": list.Add(M(0x2, 0)); list.Add(M(0x4, 0)); list.Add(M(0x2, 0)); list.Add(M(0x4, 0)); break;
+                case "right": list.Add(M(0x8, 0)); list.Add(M(0x10, 0)); break;
+                case "middle": list.Add(M(0x20, 0)); list.Add(M(0x40, 0)); break;
+                case "up": list.Add(M(0x800, 120 * amount)); break;
+                case "down": list.Add(M(0x800, -120 * amount)); break;
+                case "sleft": list.Add(M(0x1000, -120 * amount)); break;
+                case "sright": list.Add(M(0x1000, 120 * amount)); break;
+                default: throw new Exception("Unknown mouse action");
+            }
+            var arr = list.ToArray();
+            Native.SendInput((uint)arr.Length, arr, Marshal.SizeOf(typeof(Native.INPUT)));
+        }
+    }
+
+    // ---------------------------------------------------------------- laptop screen brightness (WMI)
+    static class Brightness
+    {
+        public static int Get()
+        {
+            using (var s = new System.Management.ManagementObjectSearcher("root\\WMI", "SELECT CurrentBrightness FROM WmiMonitorBrightness"))
+                foreach (System.Management.ManagementObject mo in s.Get()) return Convert.ToInt32(mo["CurrentBrightness"]);
+            return -1;
+        }
+
+        public static void Set(int v)
+        {
+            v = Math.Max(0, Math.Min(100, v));
+            bool any = false;
+            using (var s = new System.Management.ManagementObjectSearcher("root\\WMI", "SELECT * FROM WmiMonitorBrightnessMethods"))
+                foreach (System.Management.ManagementObject mo in s.Get()) { mo.InvokeMethod("WmiSetBrightness", new object[] { (uint)1, (byte)v }); any = true; }
+            if (!any) throw new Exception("This screen's brightness can't be set from Windows (works on laptop screens)");
+            Sys.BrightnessChanged(v);
+        }
+
+        public static void Step(int dir, int pct)
+        {
+            int cur = Get();
+            if (cur < 0) throw new Exception("This screen's brightness can't be set from Windows (works on laptop screens)");
+            Set(cur + dir * pct);
+        }
+    }
+
+    // ---------------------------------------------------------------- soundboard (MCI on its own thread)
+    static class Sounds
+    {
+        [DllImport("winmm.dll", CharSet = CharSet.Unicode)] static extern int mciSendString(string cmd, StringBuilder ret, int len, IntPtr cb);
+        static Control host; static readonly ManualResetEvent ready = new ManualResetEvent(false);
+        static readonly HashSet<string> open = new HashSet<string>();
+        public static readonly string[] Exts = { ".mp3", ".wav", ".wma", ".m4a", ".aac" };
+
+        public static string Dir() { string d = Path.Combine(Program.DataDir, "sounds"); Directory.CreateDirectory(d); return d; }
+
+        static void Start()
+        {
+            if (host != null) return;
+            var t = new Thread(() => { host = new Control(); host.CreateControl(); var unused = host.Handle; ready.Set(); Application.Run(); });
+            t.IsBackground = true; t.SetApartmentState(ApartmentState.STA); t.Start();
+            ready.WaitOne(5000);
+        }
+
+        static string Mci(string cmd)
+        {
+            var sb = new StringBuilder(256);
+            int err = mciSendString(cmd, sb, sb.Capacity, IntPtr.Zero);
+            if (err != 0) throw new Exception("Could not play that sound (error " + err + ")");
+            return sb.ToString();
+        }
+
+        static void OnHost(Action a)
+        {
+            Start();
+            Exception ex = null;
+            host.Invoke((MethodInvoker)delegate { try { a(); } catch (Exception e) { ex = e; } });
+            if (ex != null) throw ex;
+        }
+
+        public static string Resolve(string file)
+        {
+            string f = Environment.ExpandEnvironmentVariables((file ?? "").Trim().Trim('"'));
+            if (f == "") throw new Exception("No sound picked");
+            if (!Path.IsPathRooted(f)) f = Path.Combine(Dir(), Path.GetFileName(f));
+            if (!File.Exists(f)) throw new Exception("Sound file not found on the PC");
+            return f;
+        }
+
+        // Press once to play, press again while it plays to stop (like a soundboard pad).
+        public static void Play(string file, int volume, bool restart)
+        {
+            string f = Resolve(file);
+            string alias = "pd" + ((uint)f.ToLowerInvariant().GetHashCode()).ToString("x");
+            OnHost(() =>
+            {
+                if (open.Contains(alias))
+                {
+                    string mode = "";
+                    try { mode = Mci("status " + alias + " mode"); } catch { }
+                    try { Mci("close " + alias); } catch { }
+                    open.Remove(alias);
+                    if (mode == "playing" && !restart) return;
+                }
+                Mci("open \"" + f + "\" type mpegvideo alias " + alias);
+                open.Add(alias);
+                try { Mci("setaudio " + alias + " volume to " + Math.Max(0, Math.Min(1000, volume * 10))); } catch { }
+                Mci("play " + alias);
+            });
+        }
+
+        public static void StopAll()
+        {
+            OnHost(() => { foreach (string a in open) { try { Mci("close " + a); } catch { } } open.Clear(); });
+        }
+
+        public static ArrayList List()
+        {
+            var l = new ArrayList();
+            foreach (string f in Directory.GetFiles(Dir()))
+                if (Array.IndexOf(Exts, Path.GetExtension(f).ToLowerInvariant()) >= 0) l.Add(Path.GetFileName(f));
+            return l;
+        }
+
+        public static string Save(string name, string base64)
+        {
+            string n = Path.GetFileName(name ?? "");
+            foreach (char c in Path.GetInvalidFileNameChars()) n = n.Replace(c, '_');
+            if (Array.IndexOf(Exts, Path.GetExtension(n).ToLowerInvariant()) < 0) throw new Exception("Use an mp3, wav, m4a, aac or wma file");
+            byte[] data = Convert.FromBase64String(base64);
+            if (data.Length > 15 * 1024 * 1024) throw new Exception("Sound is too big (15 MB max)");
+            File.WriteAllBytes(Path.Combine(Dir(), n), data);
+            return n;
         }
     }
 

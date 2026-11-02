@@ -30,3 +30,18 @@
 - Real app icon pulled from the PC, or a website's logo
 - Emoji, your own image, or no icon
 - Per key: light color (12), icon color (auto or any), icon size 60-140%, backlit or solid
+
+## Stream Deck features (v1.2)
+- Tap, double-tap and hold: 3 actions per key
+- Dial keys: drag to turn PC volume, app volume, brightness, tracks, scroll, zoom, or custom
+- Pages follow the app in front on the PC (Settings > Pages)
+- App volume mixer per app (Spotify, Discord...) with live % and mute
+- Switch speakers / headphones / mic
+- Laptop screen brightness
+- Window tools: snap, maximize, minimize, next screen, keep on top, close, desktops
+- Mouse: click, double, right, middle, scroll
+- Soundboard: send a sound from the phone, plays on the PC, tap again to stop
+- Open app: running light, switch to it, close, force quit
+- Live keys: clock, timer, stopwatch, counter, CPU, memory, battery, weather
+- Animated GIF icons
+- New ready-made pages: Mixer (dials), Windows and PC
